@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <base href="/">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lit + Lion + Lit-Labs Router</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f8fafc;
+    }
+  </style>
+  <script>
+    window.process = { env: { NODE_ENV: 'development' } };
+    window.addEventListener('error', function(e) {
+      const err = document.createElement('div');
+      err.style.color = 'red';
+      err.style.padding = '10px';
+      err.style.border = '1px solid red';
+      err.style.margin = '10px 0';
+      err.textContent = 'Error: ' + e.message + ' at ' + e.filename + ':' + e.lineno;
+      document.body.prepend(err);
+    });
+  </script>
+</head>
+<body>
+  <script type="module">
+    import '@webcomponents/scoped-custom-element-registry';
+  </script>
+  
+  <app-root></app-root>
+
+  <script type="module">
+    import '/src/app/app-root.ts';
+  </script>
+</body>
+</html>
