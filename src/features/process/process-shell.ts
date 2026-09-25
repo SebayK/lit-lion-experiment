@@ -99,13 +99,13 @@ export class ProcessShell extends LitElement {
           if (!this.processCtrl.canAccess('client-profile')) {
             const redirectTo = this.processCtrl.getFirstUncompletedStep();
             this._showRedirectNotification(redirectTo);
-            this.routes.goto(`/process/${redirectTo}`);
+            this.goto(`/process/${redirectTo}`);
             return false;
           }
         } catch (error) {
           console.error('[RouteGuard] Error checking access:', error);
           this._showRedirectNotification('calculation');
-          this.routes.goto('/process/calculation');
+          this.goto('/process/calculation');
           return false;
         }
         return true;
@@ -120,13 +120,13 @@ export class ProcessShell extends LitElement {
           if (!this.processCtrl.canAccess('client-profile')) {
             const redirectTo = this.processCtrl.getFirstUncompletedStep();
             this._showRedirectNotification(redirectTo);
-            this.routes.goto(`/process/${redirectTo}`);
+            this.goto(`/process/${redirectTo}`);
             return false;
           }
         } catch (error) {
           console.error('[RouteGuard] Error checking access:', error);
           this._showRedirectNotification('calculation');
-          this.routes.goto('/process/calculation');
+          this.goto('/process/calculation');
           return false;
         }
         return true;
@@ -143,13 +143,13 @@ export class ProcessShell extends LitElement {
           if (!this.processCtrl.canAccess('income')) {
             const redirectTo = this.processCtrl.getFirstUncompletedStep();
             this._showRedirectNotification(redirectTo);
-            this.routes.goto(`/process/${redirectTo}`);
+            this.goto(`/process/${redirectTo}`);
             return false;
           }
         } catch (error) {
           console.error('[RouteGuard] Error checking access:', error);
           this._showRedirectNotification('calculation');
-          this.routes.goto('/process/calculation');
+          this.goto('/process/calculation');
           return false;
         }
         return true;
@@ -164,13 +164,13 @@ export class ProcessShell extends LitElement {
           if (!this.processCtrl.canAccess('income')) {
             const redirectTo = this.processCtrl.getFirstUncompletedStep();
             this._showRedirectNotification(redirectTo);
-            this.routes.goto(`/process/${redirectTo}`);
+            this.goto(`/process/${redirectTo}`);
             return false;
           }
         } catch (error) {
           console.error('[RouteGuard] Error checking access:', error);
           this._showRedirectNotification('calculation');
-          this.routes.goto('/process/calculation');
+          this.goto('/process/calculation');
           return false;
         }
         return true;
@@ -188,13 +188,13 @@ export class ProcessShell extends LitElement {
           if (!this.processCtrl.canAccess('email-verification')) {
             const redirectTo = this.processCtrl.getFirstUncompletedStep();
             this._showRedirectNotification(redirectTo);
-            this.routes.goto(`/process/${redirectTo}`);
+            this.goto(`/process/${redirectTo}`);
             return false;
           }
         } catch (error) {
           console.error('[RouteGuard] Error checking access:', error);
           this._showRedirectNotification('calculation');
-          this.routes.goto('/process/calculation');
+          this.goto('/process/calculation');
           return false;
         }
         
@@ -211,13 +211,13 @@ export class ProcessShell extends LitElement {
           if (!this.processCtrl.canAccess('email-verification')) {
             const redirectTo = this.processCtrl.getFirstUncompletedStep();
             this._showRedirectNotification(redirectTo);
-            this.routes.goto(`/process/${redirectTo}`);
+            this.goto(`/process/${redirectTo}`);
             return false;
           }
         } catch (error) {
           console.error('[RouteGuard] Error checking access:', error);
           this._showRedirectNotification('calculation');
-          this.routes.goto('/process/calculation');
+          this.goto('/process/calculation');
           return false;
         }
         
@@ -236,13 +236,13 @@ export class ProcessShell extends LitElement {
           if (!this.processCtrl.canAccess('phone-verification')) {
             const redirectTo = this.processCtrl.getFirstUncompletedStep();
             this._showRedirectNotification(redirectTo);
-            this.routes.goto(`/process/${redirectTo}`);
+            this.goto(`/process/${redirectTo}`);
             return false;
           }
         } catch (error) {
           console.error('[RouteGuard] Error checking access:', error);
           this._showRedirectNotification('calculation');
-          this.routes.goto('/process/calculation');
+          this.goto('/process/calculation');
           return false;
         }
         
@@ -259,13 +259,13 @@ export class ProcessShell extends LitElement {
           if (!this.processCtrl.canAccess('phone-verification')) {
             const redirectTo = this.processCtrl.getFirstUncompletedStep();
             this._showRedirectNotification(redirectTo);
-            this.routes.goto(`/process/${redirectTo}`);
+            this.goto(`/process/${redirectTo}`);
             return false;
           }
         } catch (error) {
           console.error('[RouteGuard] Error checking access:', error);
           this._showRedirectNotification('calculation');
-          this.routes.goto('/process/calculation');
+          this.goto('/process/calculation');
           return false;
         }
         
@@ -284,13 +284,13 @@ export class ProcessShell extends LitElement {
           if (!this.processCtrl.canAccess('dashboard')) {
             const redirectTo = this.processCtrl.getFirstUncompletedStep();
             this._showRedirectNotification(redirectTo);
-            this.routes.goto(`/process/${redirectTo}`);
+            this.goto(`/process/${redirectTo}`);
             return false;
           }
         } catch (error) {
           console.error('[RouteGuard] Error checking access:', error);
           this._showRedirectNotification('calculation');
-          this.routes.goto('/process/calculation');
+          this.goto('/process/calculation');
           return false;
         }
         
@@ -307,13 +307,13 @@ export class ProcessShell extends LitElement {
           if (!this.processCtrl.canAccess('dashboard')) {
             const redirectTo = this.processCtrl.getFirstUncompletedStep();
             this._showRedirectNotification(redirectTo);
-            this.routes.goto(`/process/${redirectTo}`);
+            this.goto(`/process/${redirectTo}`);
             return false;
           }
         } catch (error) {
           console.error('[RouteGuard] Error checking access:', error);
           this._showRedirectNotification('calculation');
-          this.routes.goto('/process/calculation');
+          this.goto('/process/calculation');
           return false;
         }
         
@@ -327,7 +327,7 @@ export class ProcessShell extends LitElement {
       path: "summary",
       enter: async () => {
         // Redirect old route to dashboard
-        this.routes.goto("/process/dashboard");
+        this.goto("/process/dashboard");
         return false;
       },
       render: () => html``,
@@ -336,7 +336,7 @@ export class ProcessShell extends LitElement {
       path: "/summary",
       enter: async () => {
         // Redirect old route to dashboard
-        this.routes.goto("/process/dashboard");
+        this.goto("/process/dashboard");
         return false;
       },
       render: () => html``,
@@ -625,7 +625,7 @@ export class ProcessShell extends LitElement {
         <process-live-summary></process-live-summary>
 
         <!-- Nested Router Outlet -->
-        <main @request-navigate=${(e: CustomEvent<string>) => this.routes.goto(e.detail)}>
+        <main @request-navigate=${(e: CustomEvent<string>) => this.goto(e.detail)}>
           ${this.routes.outlet()}
         </main>
       </div>

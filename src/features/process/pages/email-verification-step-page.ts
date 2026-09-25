@@ -174,7 +174,7 @@ export class EmailVerificationStepPage extends LitElement {
 
     this.dispatchEvent(
       new CustomEvent("request-navigate", {
-        detail: "/phone-verification",
+        detail: "/process/phone-verification",
         bubbles: true,
         composed: true,
       })

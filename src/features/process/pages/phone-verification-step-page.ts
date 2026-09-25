@@ -175,7 +175,7 @@ export class PhoneVerificationStepPage extends LitElement {
 
     this.dispatchEvent(
       new CustomEvent("request-navigate", {
-        detail: "/dashboard",
+        detail: "/process/dashboard",
         bubbles: true,
         composed: true,
       })
@@ -185,7 +185,7 @@ export class PhoneVerificationStepPage extends LitElement {
   private _handleBack(): void {
     this.dispatchEvent(
       new CustomEvent("request-navigate", {
-        detail: "/email-verification",
+        detail: "/process/email-verification",
         bubbles: true,
         composed: true,
       })
