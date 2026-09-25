@@ -3,55 +3,115 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
 import { ref, createRef } from 'lit/directives/ref.js';
 import '../../../features/income/index.js';
-import type { IncomeStepConfig, IncomeApp } from '../../../features/income/index.js';
+import type { IncomeStepConfig, IncomeApp, IncomeSourceConfig } from '../../../features/income/index.js';
+import { selectAvailableIncomeSourceIds } from '../../income/store/income-slice.js';
+import { selectClientProfile } from '../../client-profile/store/client-profile-slice.js';
+import { StoreController } from '../../../shared/store/StoreController.js';
 import type { ProcessController } from '../controllers/process-controller.js';
 import { processContext } from '../context.js';
 
-export const defaultMockConfig: IncomeStepConfig = {
-  availableSources: [
-    {
-      sourceId: 'umowa_o_prace',
-      label: 'Umowa o Pracę',
-      fields: [
-        {
-          name: 'companyName',
-          label: 'Nazwa pracodawcy',
-          type: 'input',
-          required: true,
-          placeholder: 'Wpisz nazwę pracodawcy'
-        },
-        {
-          name: 'nip',
-          label: 'NIP pracodawcy',
-          type: 'input',
-          required: true,
-          placeholder: 'Wpisz NIP (10 cyfr)'
-        }
-      ],
-      validations: {
-        amount: { min: 2000, required: true },
-        nip: { required: true, minLength: 10, maxLength: 10 },
-        companyName: { required: true }
-      }
+export const ALL_INCOME_SOURCE_CONFIGS: Record<string, IncomeSourceConfig> = {
+  umowa_o_prace: {
+    sourceId: 'umowa_o_prace',
+    label: 'Umowa o Pracę',
+    fields: [
+      {
+        name: 'companyName',
+        label: 'Nazwa pracodawcy',
+        type: 'input',
+        required: true,
+        placeholder: 'Wpisz nazwę pracodawcy',
+      },
+      {
+        name: 'nip',
+        label: 'NIP pracodawcy',
+        type: 'input',
+        required: true,
+        placeholder: 'Wpisz NIP (10 cyfr)',
+      },
+    ],
+    validations: {
+      amount: { min: 2000, required: true },
+      nip: { required: true, minLength: 10, maxLength: 10 },
+      companyName: { required: true },
     },
-    {
-      sourceId: '800+',
-      label: 'Świadczenie 800+',
-      fields: [
-        {
-          name: 'childrenCount',
-          label: 'Liczba dzieci',
-          type: 'amount',
-          required: true,
-          placeholder: 'Liczba dzieci (minimum 1)'
-        }
-      ],
-      validations: {
-        amount: { min: 800, max: 800, required: true },
-        childrenCount: { min: 1, required: true }
-      }
-    }
-  ]
+  },
+  umowa_zlecenie: {
+    sourceId: 'umowa_zlecenie',
+    label: 'Umowa Zlecenie / Dzieło',
+    fields: [
+      {
+        name: 'contractorName',
+        label: 'Nazwa zleceniodawcy',
+        type: 'input',
+        required: true,
+        placeholder: 'Wpisz nazwę zleceniodawcy',
+      },
+    ],
+    validations: {
+      amount: { min: 1000, required: true },
+      contractorName: { required: true },
+    },
+  },
+  dzialalnosc_gospodarcza: {
+    sourceId: 'dzialalnosc_gospodarcza',
+    label: 'Działalność Gospodarcza (JDG / B2B)',
+    fields: [
+      {
+        name: 'businessName',
+        label: 'Nazwa działalności',
+        type: 'input',
+        required: true,
+        placeholder: 'Wpisz nazwę firmy',
+      },
+      {
+        name: 'businessNip',
+        label: 'NIP działalności',
+        type: 'input',
+        required: true,
+        placeholder: 'Wpisz NIP (10 cyfr)',
+      },
+    ],
+    validations: {
+      amount: { min: 3000, required: true },
+      businessNip: { required: true, minLength: 10, maxLength: 10 },
+      businessName: { required: true },
+    },
+  },
+  emerytura: {
+    sourceId: 'emerytura',
+    label: 'Emerytura / Renta',
+    fields: [
+      {
+        name: 'benefitNumber',
+        label: 'Numer świadczenia ZUS',
+        type: 'input',
+        required: true,
+        placeholder: 'np. 123456789/ZUS',
+      },
+    ],
+    validations: {
+      amount: { min: 1000, required: true },
+      benefitNumber: { required: true },
+    },
+  },
+  '800+': {
+    sourceId: '800+',
+    label: 'Świadczenie 800+',
+    fields: [
+      {
+        name: 'childrenCount',
+        label: 'Liczba dzieci objętych świadczeniem',
+        type: 'amount',
+        required: true,
+        placeholder: 'Liczba dzieci (minimum 1)',
+      },
+    ],
+    validations: {
+      amount: { min: 800, max: 8000, required: true },
+      childrenCount: { min: 1, required: true },
+    },
+  },
 };
 
 @customElement('income-step-page')
@@ -60,7 +120,7 @@ export class IncomeStepPage extends LitElement {
   @state()
   private processCtrl?: ProcessController;
 
-  @property({ type: Object }) config: IncomeStepConfig = defaultMockConfig;
+  private storeCtrl = new StoreController(this);
 
   static styles = css`
     :host {
@@ -76,6 +136,36 @@ export class IncomeStepPage extends LitElement {
     .wrapper {
       max-width: 900px;
       margin: 0 auto;
+    }
+
+    .profile-info-banner {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      font-size: 0.9rem;
+      color: #1e40af;
+    }
+
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.35rem;
+    }
+
+    .tag {
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.8rem;
     }
 
     .nav-actions {
@@ -97,6 +187,8 @@ export class IncomeStepPage extends LitElement {
       text-decoration: none;
       transition: all 0.2s ease;
       cursor: pointer;
+      border: none;
+      font-size: 1rem;
     }
 
     .btn-secondary {
@@ -123,33 +215,11 @@ export class IncomeStepPage extends LitElement {
   private _handleBack() {
     this.dispatchEvent(
       new CustomEvent("request-navigate", {
-        detail: "/process/calculation",
+        detail: "/process/client-profile",
         bubbles: true,
         composed: true,
       })
     );
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    console.log('📍 [IncomeStepPage] connectedCallback');
-  }
-
-  protected updated(changedProperties: Map<string, any>) {
-    super.updated(changedProperties);
-    
-    if (changedProperties.has('processCtrl')) {
-      console.group('📍 [IncomeStepPage] processCtrl Updated');
-      console.log('processCtrl:', this.processCtrl);
-      console.log('Is available:', !!this.processCtrl);
-      if (this.processCtrl) {
-        console.log('calculationData:', this.processCtrl.calculationData);
-        console.log('stepStatuses:', this.processCtrl.stepStatuses);
-        console.log('email:', this.processCtrl.email);
-        console.log('phone:', this.processCtrl.phone);
-      }
-      console.groupEnd();
-    }
   }
 
   private _handleNext() {
@@ -173,19 +243,45 @@ export class IncomeStepPage extends LitElement {
   #incomeAppRef = createRef<IncomeApp>();
 
   render() {
+    const profile = selectClientProfile(this.storeCtrl.state);
+    const availableSourceIds = selectAvailableIncomeSourceIds(this.storeCtrl.state);
+
+    const availableSources = availableSourceIds
+      .map((id) => ALL_INCOME_SOURCE_CONFIGS[id])
+      .filter((cfg): cfg is IncomeSourceConfig => Boolean(cfg));
+
+    const config: IncomeStepConfig = {
+      availableSources,
+    };
+
     return html`
       <div class="wrapper">
-        <income-app ${ref(this.#incomeAppRef)} .config="${this.config}"></income-app>
+        <div class="profile-info-banner">
+          <div>
+            <strong>🔗 Aktywne filtry ze Slice'a Profilu Klienta:</strong>
+            <div class="tags">
+              <span class="tag">Stan: ${profile.maritalStatus}</span>
+              <span class="tag">Osoby na utrzymaniu: ${profile.dependentsCount}</span>
+              <span class="tag">Działalność: ${profile.hasBusinessActivity ? 'Tak (B2B)' : 'Nie'}</span>
+            </div>
+          </div>
+          <div style="text-align: right; font-size: 0.85rem;">
+            Dostępnych źródeł: <strong>${availableSources.length}</strong>
+          </div>
+        </div>
+
+        <income-app ${ref(this.#incomeAppRef)} .config="${config}"></income-app>
 
         <div class="nav-actions">
           <button type="button" class="btn btn-secondary" @click=${this._handleBack}>
-            &larr; Wstecz do Startu
+            &larr; Wstecz do Danych Klienta
           </button>
           <button type="button" class="btn btn-primary" @click=${this._handleNext}>
-            Przejdź do Podsumowania &rarr;
+            Przejdź do Weryfikacji Email &rarr;
           </button>
         </div>
       </div>
     `;
   }
 }
+

@@ -65,9 +65,13 @@ function baseFields(withDuration: boolean): FieldSpecification[] {
  * (e.g. product-specific ones) fall back to the full default field set.
  */
 const BASE_800_PLUS = baseFields(false);
+const BASE_EMERYTURA = baseFields(false);
 const BASE_SPECIFICATIONS: Record<string, FieldSpecification[]> = {
   umowa_o_prace: baseFields(true),
   zlecenie: baseFields(true),
+  umowa_zlecenie: baseFields(true),
+  dzialalnosc_gospodarcza: baseFields(true),
+  emerytura: BASE_EMERYTURA,
   inne: baseFields(true),
   '800+': BASE_800_PLUS
 };

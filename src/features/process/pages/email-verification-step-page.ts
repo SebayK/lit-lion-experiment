@@ -184,7 +184,7 @@ export class EmailVerificationStepPage extends LitElement {
   private _handleBack(): void {
     this.dispatchEvent(
       new CustomEvent("request-navigate", {
-        detail: "/calculation",
+        detail: "/process/income",
         bubbles: true,
         composed: true,
       })

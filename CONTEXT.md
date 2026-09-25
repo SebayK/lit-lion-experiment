@@ -32,6 +32,14 @@ _Avoid_: Screen, Sub-page, Phase
 The financial parameters and calculated terms (e.g., loan amount, period, monthly installment) established during the Calculation step and required by subsequent Process Steps.
 _Avoid_: Calc result, Simulation
 
+**Client Context**:
+The explicit input contract describing applicant attributes (e.g., business activity status, dependents count) passed by the Process Shell to downstream Process Steps.
+_Avoid_: User data, Customer payload, Applicant props
+
+**Process Shell**:
+The orchestrating container for a specific Product's Application Process that manages step lifecycle, routing guards, and cross-step context passing using ReactiveControllers.
+_Avoid_: App root, Wizard wrapper, Master view
+
 **Native Bridge**:
 The abstract communication layer that translates between the web application's Request-Response model and the underlying native device WebView bridges (Android's `addJavascriptInterface` and iOS's `WKScriptMessageHandler`). It handles JSON serialization and Correlation ID mapping.
 _Avoid_: window.android, postMessage wrapper
@@ -43,4 +51,3 @@ _Avoid_: Form schema, Input config
 **Headless Validation Engine**:
 The DOM-independent validation runner that evaluates raw domain models against an Income Specification programmatically using Lion validator `.execute()` methods.
 _Avoid_: Form validator, UI validator
-

@@ -14,7 +14,17 @@ export const rootReducer = combineSlices().withLazyLoadedSlices<LazyLoadedSlices
 
 export const store = configureStore({
   reducer: rootReducer,
+  devTools: {
+    name: 'Lit Lion Experiment',
+    trace: true,
+  },
 });
+
+// Expose store globally on window in development for direct debugging in console
+if (typeof window !== 'undefined') {
+  (window as any).store = store;
+  (window as any).__REDUX_STORE__ = store;
+}
 
 export type RootState = ReturnType<typeof rootReducer>;
 export type AppDispatch = typeof store.dispatch;

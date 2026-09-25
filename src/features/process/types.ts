@@ -1,6 +1,7 @@
 // Process step identifiers
 export type ProcessStep =
   | 'calculation'
+  | 'client-profile'
   | 'income'
   | 'email-verification'
   | 'phone-verification'
@@ -20,4 +21,3 @@ export interface ProcessState {
   calculationData: CalculationData | null;
   stepStatuses: Record<ProcessStep, StepStatus>;
 }
-

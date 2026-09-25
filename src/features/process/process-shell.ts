@@ -24,6 +24,7 @@ export class ProcessShell extends LitElement {
   // Step labels map for Polish translations
   private readonly STEP_LABELS: Record<ProcessStep, string> = {
     'calculation': 'Kalkulacja',
+    'client-profile': 'Dane Klienta',
     'income': 'Dochody',
     'email-verification': 'Weryfikacja Email',
     'phone-verification': 'Weryfikacja Telefonu',
@@ -87,6 +88,50 @@ export class ProcessShell extends LitElement {
         return true;
       },
       render: () => html`<calculation-step-page></calculation-step-page>`,
+    },
+
+    // Client Profile step - with guard
+    {
+      path: "client-profile",
+      enter: async () => {
+        await import("./pages/client-profile-step-page.js");
+        try {
+          if (!this.processCtrl.canAccess('client-profile')) {
+            const redirectTo = this.processCtrl.getFirstUncompletedStep();
+            this._showRedirectNotification(redirectTo);
+            this.routes.goto(`/process/${redirectTo}`);
+            return false;
+          }
+        } catch (error) {
+          console.error('[RouteGuard] Error checking access:', error);
+          this._showRedirectNotification('calculation');
+          this.routes.goto('/process/calculation');
+          return false;
+        }
+        return true;
+      },
+      render: () => html`<client-profile-step-page></client-profile-step-page>`,
+    },
+    {
+      path: "/client-profile",
+      enter: async () => {
+        await import("./pages/client-profile-step-page.js");
+        try {
+          if (!this.processCtrl.canAccess('client-profile')) {
+            const redirectTo = this.processCtrl.getFirstUncompletedStep();
+            this._showRedirectNotification(redirectTo);
+            this.routes.goto(`/process/${redirectTo}`);
+            return false;
+          }
+        } catch (error) {
+          console.error('[RouteGuard] Error checking access:', error);
+          this._showRedirectNotification('calculation');
+          this.routes.goto('/process/calculation');
+          return false;
+        }
+        return true;
+      },
+      render: () => html`<client-profile-step-page></client-profile-step-page>`,
     },
 
     // Income step - with guard
@@ -502,6 +547,7 @@ export class ProcessShell extends LitElement {
   private getActiveStep(): ProcessStep | "start" {
     const path = window.location.pathname;
     if (path.includes("/process/calculation")) return "calculation";
+    if (path.includes("/process/client-profile")) return "client-profile";
     if (path.includes("/process/income")) return "income";
     if (path.includes("/process/email-verification")) return "email-verification";
     if (path.includes("/process/phone-verification")) return "phone-verification";
@@ -564,13 +610,15 @@ export class ProcessShell extends LitElement {
         <nav class="stepper" aria-label="Kroki procesu">
           ${this._renderStepItem('calculation', 0, 'Kalkulacja')}
           <div class="step-divider"></div>
-          ${this._renderStepItem('income', 1, 'Dochody')}
+          ${this._renderStepItem('client-profile', 1, 'Dane Klienta')}
           <div class="step-divider"></div>
-          ${this._renderStepItem('email-verification', 2, 'Email')}
+          ${this._renderStepItem('income', 2, 'Dochody')}
           <div class="step-divider"></div>
-          ${this._renderStepItem('phone-verification', 3, 'Telefon')}
+          ${this._renderStepItem('email-verification', 3, 'Email')}
           <div class="step-divider"></div>
-          ${this._renderStepItem('dashboard', 4, 'Panel')}
+          ${this._renderStepItem('phone-verification', 4, 'Telefon')}
+          <div class="step-divider"></div>
+          ${this._renderStepItem('dashboard', 5, 'Panel')}
         </nav>
 
         <!-- Live Reactive Summary Subscriber Widget -->

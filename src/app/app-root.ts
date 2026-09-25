@@ -6,6 +6,9 @@ import './pages/home-page.js';
 import './pages/about-page.js';
 import './pages/not-found-page.js';
 import { initMocks } from '../mocks/index.js';
+import '../features/calculation/store/calculation-slice.js';
+import '../features/client-profile/store/client-profile-slice.js';
+import '../features/income/store/income-slice.js';
 
 // Rejestracja mocków HTTP (MSW Service Worker)
 initMocks();

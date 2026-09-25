@@ -3,10 +3,14 @@ import { customElement, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
 import { processContext } from '../context.js';
 import type { ProcessController } from '../controllers/process-controller.js';
+import { StoreController } from '../../../shared/store/StoreController.js';
+import { selectCalculation } from '../../calculation/store/calculation-slice.js';
+import { selectClientProfile } from '../../client-profile/store/client-profile-slice.js';
+import { selectIncomeItems, selectTotalIncome } from '../../income/store/income-slice.js';
 
 /**
- * A live summary component that subscribes directly to ProcessController.
- * Updates immediately when calculation values change in real-time.
+ * A live summary component that subscribes to ProcessController and Redux StoreController.
+ * Updates immediately when calculation, profile, or income values change in real-time.
  */
 @customElement('process-live-summary')
 export class ProcessLiveSummary extends LitElement {
@@ -14,6 +18,7 @@ export class ProcessLiveSummary extends LitElement {
   @state()
   private processCtrl?: ProcessController;
 
+  private storeCtrl = new StoreController(this);
   private unsubscribe?: () => void;
 
   static styles = css`
@@ -36,6 +41,13 @@ export class ProcessLiveSummary extends LitElement {
       font-size: 0.95rem;
     }
 
+    .section-left, .section-right {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+    }
+
     .item {
       display: flex;
       align-items: center;
@@ -51,6 +63,10 @@ export class ProcessLiveSummary extends LitElement {
       color: #38bdf8;
       font-weight: 700;
       font-size: 1.05rem;
+    }
+
+    .value.income {
+      color: #4ade80;
     }
 
     .badge {
@@ -101,29 +117,48 @@ export class ProcessLiveSummary extends LitElement {
   }
 
   render() {
-    const calc = this.processCtrl?.calculationData;
+    const calcFromStore = selectCalculation(this.storeCtrl.state);
+    const calc = this.processCtrl?.calculationData || calcFromStore;
+    const profile = selectClientProfile(this.storeCtrl.state);
+    const incomes = selectIncomeItems(this.storeCtrl.state);
+    const totalIncome = selectTotalIncome(this.storeCtrl.state);
+
     if (!calc || calc.loanAmount <= 0) {
       return html``;
     }
 
     return html`
       <div class="live-bar">
-        <div class="item">
+        <div class="section-left">
           <span class="badge">
-            <span class="pulse-dot"></span> Live
+            <span class="pulse-dot"></span> Store Live
           </span>
-          <span class="label">Kwota:</span>
-          <span class="value">${calc.loanAmount.toLocaleString('pl-PL')} zł</span>
+          <div class="item">
+            <span class="label">Kwota:</span>
+            <span class="value">${calc.loanAmount.toLocaleString('pl-PL')} zł</span>
+          </div>
+
+          <div class="item">
+            <span class="label">Rata:</span>
+            <span class="value">${calc.monthlyInstallment.toFixed(2)} zł/mc</span>
+          </div>
         </div>
 
-        <div class="item">
-          <span class="label">Okres:</span>
-          <span class="value">${calc.periodMonths} mies.</span>
-        </div>
-
-        <div class="item">
-          <span class="label">Szacowana rata:</span>
-          <span class="value">${calc.monthlyInstallment.toFixed(2)} zł/mc</span>
+        <div class="section-right">
+          ${profile?.hasBusinessActivity
+            ? html`<div class="item"><span class="label">Firma:</span> <span class="value">B2B</span></div>`
+            : ''}
+          ${profile?.dependentsCount && profile.dependentsCount > 0
+            ? html`<div class="item"><span class="label">Dzieci:</span> <span class="value">${profile.dependentsCount}</span></div>`
+            : ''}
+          ${incomes && incomes.length > 0
+            ? html`
+                <div class="item">
+                  <span class="label">Dochód (${incomes.length}):</span>
+                  <span class="value income">+${totalIncome.toLocaleString('pl-PL')} zł</span>
+                </div>
+              `
+            : ''}
         </div>
       </div>
     `;

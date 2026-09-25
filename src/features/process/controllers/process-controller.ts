@@ -22,6 +22,7 @@ export class ProcessController implements ReactiveController {
   // Step progression statuses
   stepStatuses: Record<ProcessStep, StepStatus> = {
     calculation: 'pending',
+    'client-profile': 'pending',
     income: 'pending',
     'email-verification': 'pending',
     'phone-verification': 'pending',
@@ -79,8 +80,13 @@ export class ProcessController implements ReactiveController {
     switch (step) {
       case 'calculation':
         return true;
-      case 'income':
+      case 'client-profile':
         return this.calculationData !== null && this.stepStatuses.calculation === 'completed';
+      case 'income':
+        return (
+          this.canAccess('client-profile') &&
+          this.stepStatuses['client-profile'] === 'completed'
+        );
       case 'email-verification':
         return (
           this.canAccess('income') &&
@@ -123,6 +129,14 @@ export class ProcessController implements ReactiveController {
   }
 
   /**
+   * Completes the client-profile step.
+   */
+  completeClientProfile(): void {
+    this.stepStatuses['client-profile'] = 'completed';
+    this._notify();
+  }
+
+  /**
    * Completes the income step.
    */
   completeIncome(): void {
@@ -157,6 +171,7 @@ export class ProcessController implements ReactiveController {
     this.phone = null;
     this.stepStatuses = {
       calculation: 'pending',
+      'client-profile': 'pending',
       income: 'pending',
       'email-verification': 'pending',
       'phone-verification': 'pending',
@@ -168,12 +183,12 @@ export class ProcessController implements ReactiveController {
   /**
    * Returns the first step that is not yet completed.
    * Used for redirect logic when route guards block access to a step that
-   * requires uncompleted prerequisites. Iterates through steps in sequential
-   * order and returns the first with 'pending' status, or 'calculation' as fallback.
+   * requires uncompleted prerequisites.
    */
   getFirstUncompletedStep(): ProcessStep {
     const stepOrder: ProcessStep[] = [
       'calculation',
+      'client-profile',
       'income',
       'email-verification',
       'phone-verification',

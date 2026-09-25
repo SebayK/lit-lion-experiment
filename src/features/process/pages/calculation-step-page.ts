@@ -4,12 +4,20 @@ import { consume } from '@lit/context';
 import type { ProcessController } from '../controllers/process-controller.js';
 import { processContext } from '../context.js';
 import type { CalculationData } from '../types.js';
+import { StoreController } from '../../../shared/store/StoreController.js';
+import { store } from '../../../shared/store/index.js';
+import {
+  updateCalculation,
+  selectCalculation,
+} from '../../calculation/store/calculation-slice.js';
 
 @customElement('calculation-step-page')
 export class CalculationStepPage extends LitElement {
   @consume({ context: processContext, subscribe: true })
   @state()
   private processCtrl?: ProcessController;
+
+  private storeCtrl = new StoreController(this);
 
   @state()
   private loanAmount: number = 10000;
@@ -67,6 +75,7 @@ export class CalculationStepPage extends LitElement {
       border-radius: 8px;
       font-size: 1rem;
       transition: border-color 0.2s;
+      box-sizing: border-box;
     }
 
     input[type="number"]:focus {
@@ -130,9 +139,7 @@ export class CalculationStepPage extends LitElement {
   `;
 
   private _calculateInstallment(): void {
-    // Simplified installment calculation (equal installments)
-    // Real calculation would include interest rate
-    const interestRate = 0.05; // 5% annual interest rate
+    const interestRate = 0.05;
     const monthlyRate = interestRate / 12;
     const n = this.periodMonths;
     
@@ -145,26 +152,27 @@ export class CalculationStepPage extends LitElement {
     this.monthlyInstallment = Math.round(this.monthlyInstallment * 100) / 100;
   }
 
-  private _handleLoanAmountChange(e: Event): void {
-    const input = e.target as HTMLInputElement;
-    this.loanAmount = Number(input.value);
+  private _syncCalculation(): void {
     this._calculateInstallment();
-    this.processCtrl?.updateCalculation({
+    const data: CalculationData = {
       loanAmount: this.loanAmount,
       periodMonths: this.periodMonths,
       monthlyInstallment: this.monthlyInstallment,
-    });
+    };
+    this.processCtrl?.updateCalculation(data);
+    store.dispatch(updateCalculation(data));
+  }
+
+  private _handleLoanAmountChange(e: Event): void {
+    const input = e.target as HTMLInputElement;
+    this.loanAmount = Number(input.value);
+    this._syncCalculation();
   }
 
   private _handlePeriodChange(e: Event): void {
     const input = e.target as HTMLInputElement;
     this.periodMonths = Number(input.value);
-    this._calculateInstallment();
-    this.processCtrl?.updateCalculation({
-      loanAmount: this.loanAmount,
-      periodMonths: this.periodMonths,
-      monthlyInstallment: this.monthlyInstallment,
-    });
+    this._syncCalculation();
   }
 
   private _handleComplete(): void {
@@ -175,10 +183,11 @@ export class CalculationStepPage extends LitElement {
     };
 
     this.processCtrl?.completeCalculation(data);
+    store.dispatch(updateCalculation(data));
 
     this.dispatchEvent(
       new CustomEvent("request-navigate", {
-        detail: "/process/income",
+        detail: "/process/client-profile",
         bubbles: true,
         composed: true,
       })
@@ -187,7 +196,11 @@ export class CalculationStepPage extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    if (this.processCtrl?.calculationData) {
+    const currentReduxCalc = selectCalculation(this.storeCtrl.state);
+    if (currentReduxCalc && currentReduxCalc.loanAmount > 0) {
+      this.loanAmount = currentReduxCalc.loanAmount;
+      this.periodMonths = currentReduxCalc.periodMonths;
+    } else if (this.processCtrl?.calculationData) {
       this.loanAmount = this.processCtrl.calculationData.loanAmount;
       this.periodMonths = this.processCtrl.calculationData.periodMonths;
     }
@@ -234,7 +247,7 @@ export class CalculationStepPage extends LitElement {
 
         <div class="actions">
           <button type="button" class="btn btn-primary" @click=${this._handleComplete}>
-            Przejdź dalej &rarr;
+            Przejdź do Danych Klienta &rarr;
           </button>
         </div>
       </div>
