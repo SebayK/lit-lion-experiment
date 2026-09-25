@@ -4,6 +4,15 @@ export default {
   nodeResolve: true,
   concurrency: 1,
   files: ['src/**/*.test.ts'],
+  testRunnerHtml: testFramework =>
+    `<html>
+      <head>
+        <script>
+          window.process = window.process || { env: { NODE_ENV: 'development' } };
+        </script>
+        <script type="module" src="${testFramework}"></script>
+      </head>
+    </html>`,
   plugins: [
     {
       name: 'ts-resolver',
@@ -17,6 +26,9 @@ export default {
       ts: true,
       tsconfig: './tsconfig.json',
       target: 'auto',
+      define: {
+        'process.env.NODE_ENV': '"development"',
+      },
     })
   ]
 };
