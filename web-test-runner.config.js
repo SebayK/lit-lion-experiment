@@ -2,6 +2,7 @@ import { esbuildPlugin } from '@web/dev-server-esbuild';
 
 export default {
   nodeResolve: true,
+  concurrency: 1,
   files: ['src/**/*.test.ts'],
   plugins: [
     {

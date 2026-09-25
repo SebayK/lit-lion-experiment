@@ -35,3 +35,12 @@ _Avoid_: Calc result, Simulation
 **Native Bridge**:
 The abstract communication layer that translates between the web application's Request-Response model and the underlying native device WebView bridges (Android's `addJavascriptInterface` and iOS's `WKScriptMessageHandler`). It handles JSON serialization and Correlation ID mapping.
 _Avoid_: window.android, postMessage wrapper
+
+**Income Specification**:
+The single source of truth defining fields, dynamic dependencies, and `@lion/ui` validator instances per Income Source.
+_Avoid_: Form schema, Input config
+
+**Headless Validation Engine**:
+The DOM-independent validation runner that evaluates raw domain models against an Income Specification programmatically using Lion validator `.execute()` methods.
+_Avoid_: Form validator, UI validator
+

@@ -1,10 +1,11 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { ScopedElementsMixin } from '@open-wc/scoped-elements/lit-element.js';
 import { StoreController } from '../../../shared/store/StoreController.js';
 import { store } from '../../../shared/store/index.js';
 import { addIncome, updateIncome, deleteIncome } from '../store/income-slice.js';
 import { Income, IncomeStepConfig } from '../types.js';
+import { ValidationEngine } from '../domain/validation-engine.js';
 
 import { IncomeTable } from './income-table.js';
 import { IncomeDialog } from './income-dialog.js';
@@ -43,6 +44,22 @@ export class IncomeApp extends ScopedElementsMixin(LitElement) {
 
   private store = new StoreController(this);
 
+  @state() private _invalidIncomeId?: string;
+
+  /**
+   * Domain/store-level step validation: every income in the store is checked
+   * headlessly against the Income Specification. The first incomplete income
+   * gets its dialog auto-opened so the user can fix it immediately.
+   *
+   * @returns `true` when all incomes are complete.
+   */
+  validateStep(): boolean {
+    const incomes = this.store.state.incomes.items;
+    const invalid = incomes.find(income => !ValidationEngine.isIncomeValid(income, this.config));
+    this._invalidIncomeId = invalid?.id;
+    return !invalid;
+  }
+
   private handleSave(e: CustomEvent<Income>) {
     const income = e.detail;
     const isExisting = this.store.state.incomes.items.some(i => i.id === income.id);
@@ -64,9 +81,11 @@ export class IncomeApp extends ScopedElementsMixin(LitElement) {
     return html`
       <h1>Zarządzanie Dochodami</h1>
       
-      <income-table 
+      <income-table
         .config="${this.config}"
         .incomes="${incomes}"
+        .invalidIncomeId="${this._invalidIncomeId}"
+        @auto-open-handled="${() => { this._invalidIncomeId = undefined; }}"
         @save="${this.handleSave}"
         @delete="${this.handleDelete}"
       ></income-table>

@@ -8,5 +8,9 @@ export { incomeReducer, addIncome, updateIncome, deleteIncome } from './store/in
 
 // 3. Export Public API & Types
 export { saveIncomeApi } from './api/income-api.js';
+export { IncomeSpecification } from './domain/income-specification.js';
+export type { FieldRules, FieldSpecification } from './domain/income-specification.js';
+export { ValidationEngine } from './domain/validation-engine.js';
+export type { HeadlessValidationResult, FieldErrorDetail } from './domain/validation-engine.js';
 export type { Income, IncomeStepConfig, IncomeSourceConfig, FieldValidationConfig, ValidationRule } from './types.js';
 

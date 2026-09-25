@@ -1,5 +1,5 @@
 import { Income, IncomeStepConfig } from '../types.js';
-import { Required, MinNumber, MaxNumber, MinLength, MaxLength } from '@lion/ui/form-core.js';
+import { IncomeSpecification } from '../domain/income-specification.js';
 
 export interface FieldDefinition {
   name: string;
@@ -8,46 +8,27 @@ export interface FieldDefinition {
   validators: any[];
 }
 
+/**
+ * Form-mapping helper layer. Validator creation and schema queries are
+ * delegated to the Income Specification (single source of truth) so UI
+ * bindings and the headless Validation Engine share the same rules.
+ */
 export class IncomeSchemaEngine {
   static getValidatorsForField(config: IncomeStepConfig | undefined, sourceId: string, fieldName: string): any[] {
-    const validators: any[] = [new Required()]; 
-    
-    if (!config || !sourceId) return validators;
-    
-    const sourceConfig = config.availableSources.find(s => s.sourceId === sourceId);
-    if (sourceConfig && sourceConfig.validations) {
-      const rules = sourceConfig.validations[fieldName];
-      if (rules) {
-        if (rules.min !== undefined) validators.push(new MinNumber(rules.min));
-        if (rules.max !== undefined) validators.push(new MaxNumber(rules.max));
-        if (rules.minLength !== undefined) validators.push(new MinLength(rules.minLength));
-        if (rules.maxLength !== undefined) validators.push(new MaxLength(rules.maxLength));
-      }
-    }
-    return validators;
+    return IncomeSpecification.createValidators(sourceId, fieldName, config);
   }
 
   static getFieldsForSource(config: IncomeStepConfig | undefined, sourceId: string): FieldDefinition[] {
-    const fields: FieldDefinition[] = [];
+    // Only product-specific (config-defined) fields — base fields such as
+    // amount/currency/duration/paymentMethod are rendered by the dialog itself.
+    const sourceConfig = config?.availableSources.find(s => s.sourceId === sourceId);
 
-    if (!config || !sourceId) return fields;
-    
-    const sourceConfig = config.availableSources.find(s => s.sourceId === sourceId);
-    if (!sourceConfig) return fields;
-
-    // Use fields defined in config if available, otherwise return empty
-    if (sourceConfig.fields) {
-      sourceConfig.fields.forEach(field => {
-        fields.push({
-          name: field.name,
-          label: field.label,
-          type: field.type === 'amount' || field.type === 'input' ? field.type : 'input',
-          validators: this.getValidatorsForField(config, sourceId, field.name)
-        });
-      });
-    }
-
-    return fields;
+    return (sourceConfig?.fields ?? []).map(field => ({
+      name: field.name,
+      label: field.label,
+      type: field.type === 'amount' || field.type === 'input' ? field.type : 'input',
+      validators: IncomeSpecification.createValidators(sourceId, field.name, config)
+    }));
   }
 
   static generateId(): string {

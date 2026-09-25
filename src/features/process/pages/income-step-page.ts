@@ -1,8 +1,9 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
+import { ref, createRef } from 'lit/directives/ref.js';
 import '../../../features/income/index.js';
-import type { IncomeStepConfig } from '../../../features/income/index.js';
+import type { IncomeStepConfig, IncomeApp } from '../../../features/income/index.js';
 import type { ProcessController } from '../controllers/process-controller.js';
 import { processContext } from '../context.js';
 
@@ -122,7 +123,7 @@ export class IncomeStepPage extends LitElement {
   private _handleBack() {
     this.dispatchEvent(
       new CustomEvent("request-navigate", {
-        detail: "/process",
+        detail: "/process/calculation",
         bubbles: true,
         composed: true,
       })
@@ -152,19 +153,29 @@ export class IncomeStepPage extends LitElement {
   }
 
   private _handleNext() {
+    const incomeApp = this.#incomeAppRef.value;
+    if (incomeApp && !incomeApp.validateStep()) {
+      console.warn('⚠️ [IncomeStepPage] Step validation failed — incomplete income dialog opened.');
+      return;
+    }
+
+    this.processCtrl?.completeIncome();
+
     this.dispatchEvent(
       new CustomEvent("request-navigate", {
-        detail: "/process/summary",
+        detail: "/process/email-verification",
         bubbles: true,
         composed: true,
       })
     );
   }
 
+  #incomeAppRef = createRef<IncomeApp>();
+
   render() {
     return html`
       <div class="wrapper">
-        <income-app .config="${this.config}"></income-app>
+        <income-app ${ref(this.#incomeAppRef)} .config="${this.config}"></income-app>
 
         <div class="nav-actions">
           <button type="button" class="btn btn-secondary" @click=${this._handleBack}>

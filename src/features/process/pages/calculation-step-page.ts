@@ -149,12 +149,22 @@ export class CalculationStepPage extends LitElement {
     const input = e.target as HTMLInputElement;
     this.loanAmount = Number(input.value);
     this._calculateInstallment();
+    this.processCtrl?.updateCalculation({
+      loanAmount: this.loanAmount,
+      periodMonths: this.periodMonths,
+      monthlyInstallment: this.monthlyInstallment,
+    });
   }
 
   private _handlePeriodChange(e: Event): void {
     const input = e.target as HTMLInputElement;
     this.periodMonths = Number(input.value);
     this._calculateInstallment();
+    this.processCtrl?.updateCalculation({
+      loanAmount: this.loanAmount,
+      periodMonths: this.periodMonths,
+      monthlyInstallment: this.monthlyInstallment,
+    });
   }
 
   private _handleComplete(): void {
@@ -168,7 +178,7 @@ export class CalculationStepPage extends LitElement {
 
     this.dispatchEvent(
       new CustomEvent("request-navigate", {
-        detail: "/email-verification",
+        detail: "/process/income",
         bubbles: true,
         composed: true,
       })
@@ -177,8 +187,11 @@ export class CalculationStepPage extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    if (this.processCtrl?.calculationData) {
+      this.loanAmount = this.processCtrl.calculationData.loanAmount;
+      this.periodMonths = this.processCtrl.calculationData.periodMonths;
+    }
     this._calculateInstallment();
-    console.log(processContext)
   }
 
   render() {

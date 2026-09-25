@@ -41,6 +41,8 @@ interface LionFieldLike extends HTMLElement {
   _focusableNode?: HTMLElement;
   /** Present when this field is itself a form-group (nested fieldset). */
   formElements?: { [key: string]: LionFieldLike | LionFieldLike[] };
+  /** True for LionFieldset / LionForm, false for choice groups (LionRadioGroup, LionCheckboxGroup). */
+  _isFormOrFieldset?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -403,7 +405,7 @@ export class FormController<T extends Record<string, unknown> = Record<string, u
    * treated as a single logical field (the group element itself is returned).
    */
   #findFirstErrorField(group: LionFormLike): LionFieldLike | null {
-    for (const key of Object.keys(group.formElements)) {
+    for (const key of FormController.#namedKeys(group.formElements)) {
       const entry = group.formElements[key];
       const candidates = Array.isArray(entry) ? entry : [entry as LionFieldLike];
 
@@ -411,7 +413,7 @@ export class FormController<T extends Record<string, unknown> = Record<string, u
         if (!field.hasFeedbackFor?.includes('error')) continue;
 
         // Recurse into nested form groups (fieldsets).
-        if (field.formElements) {
+        if (field._isFormOrFieldset && field.formElements) {
           const nested = this.#findFirstErrorField(field as unknown as LionFormLike);
           if (nested) return nested;
         }
@@ -436,6 +438,26 @@ export class FormController<T extends Record<string, unknown> = Record<string, u
    * field's `name` key — cast to `keyof T` for type safety.
    *
    * Only fields whose `hasFeedbackFor` includes `'error'` appear in the map.
+   *
+   * ### `FormControlsCollection` and numeric keys
+   *
+   * `FormControlsCollection extends Array`, so `Object.keys()` returns both
+   * numeric array indices (`'0'`, `'1'`, …) and named field keys.  We filter
+   * out the numeric indices with {@link FormController.#namedKeys} — mirroring
+   * Lion's own `FormControlsCollection._keys()` method — to avoid polluting
+   * `errors` with spurious numeric entries.
+   *
+   * ### Fieldset recursion
+   *
+   * A `lion-fieldset` aggregates its children's errors into its own
+   * `hasFeedbackFor`, but its `validationStates.error` only contains Lion's
+   * internal `FormElementsHaveNoError` meta-validator — **not** the validators
+   * (`Required`, `MinLength`, …) defined on the child fields.
+   *
+   * When an entry carries its own `formElements` and is a true fieldset
+   * (`_isFormOrFieldset = true`), we recurse into it and collect the validators
+   * from the failing children, storing the result under the fieldset's key so callers see e.g.
+   * `errors.durationDetails = { validators: ['Required'] }`.
    */
   #collectErrors(form: LionFormLike): Partial<Record<keyof T, FieldErrors>> {
     const errors: Partial<Record<keyof T, FieldErrors>> = {};
@@ -443,15 +465,28 @@ export class FormController<T extends Record<string, unknown> = Record<string, u
     const recordError = (key: string, field: LionFieldLike): void => {
       if (!field.hasFeedbackFor?.includes('error')) return;
 
+      // If this entry is a fieldset (has its own formElements and _isFormOrFieldset is true),
+      // recurse to extract the actual failing validators from the children, rather than
+      // reading the fieldset's own validationStates which only contains the
+      // Lion-internal FormElementsHaveNoError meta-validator.
+      if (field._isFormOrFieldset && field.formElements) {
+        const childValidators = this.#collectChildValidators(
+          field as unknown as LionFormLike,
+        );
+        errors[key as keyof T] = { validators: childValidators };
+        return;
+      }
+
       const validators = Object.keys(field.validationStates?.['error'] ?? {});
       errors[key as keyof T] = { validators };
     };
 
-    for (const key of Object.keys(form.formElements)) {
+    for (const key of FormController.#namedKeys(form.formElements)) {
       const entry = form.formElements[key];
 
       if (Array.isArray(entry)) {
-        // Checkbox-group / radio-group: the group itself carries the error.
+        // Checkbox-group / radio-group registered with `[]` suffix: the group
+        // element that carries the error surfaces the validators directly.
         const groupWithError = entry.find((f) => f.hasFeedbackFor?.includes('error'));
         if (groupWithError) recordError(key, groupWithError);
       } else {
@@ -460,5 +495,48 @@ export class FormController<T extends Record<string, unknown> = Record<string, u
     }
 
     return errors;
+  }
+
+  /**
+   * Recursively collects all failing validator names from the direct children
+   * of a fieldset-like group.
+   *
+   * Used by {@link #collectErrors} when it encounters a fieldset entry: the
+   * fieldset's own `validationStates` only contains Lion meta-validators, so
+   * we descend one level to find the real failing validators on the children
+   * (e.g. `Required` on a `lion-radio-group` nested inside a fieldset).
+   */
+  #collectChildValidators(group: LionFormLike): string[] {
+    const validators: string[] = [];
+
+    for (const key of FormController.#namedKeys(group.formElements)) {
+      const entry = group.formElements[key];
+      const candidates = Array.isArray(entry) ? entry : [entry as LionFieldLike];
+
+      for (const field of candidates) {
+        if (!field.hasFeedbackFor?.includes('error')) continue;
+
+        // If this child is itself a fieldset, go one level deeper.
+        if (field._isFormOrFieldset && field.formElements) {
+          validators.push(...this.#collectChildValidators(field as unknown as LionFormLike));
+        } else {
+          validators.push(...Object.keys(field.validationStates?.['error'] ?? {}));
+        }
+      }
+    }
+
+    return validators;
+  }
+
+  /**
+   * Returns only the named (non-numeric) keys of a `FormControlsCollection`.
+   *
+   * `FormControlsCollection extends Array`, so `Object.keys()` includes both
+   * numeric array indices and the named field keys added by
+   * `FormRegistrarMixin.addFormElement`.  Filtering out the numeric ones
+   * matches the behaviour of Lion's own `FormControlsCollection._keys()`.
+   */
+  static #namedKeys(collection: object): string[] {
+    return Object.keys(collection).filter(k => Number.isNaN(Number(k)));
   }
 }

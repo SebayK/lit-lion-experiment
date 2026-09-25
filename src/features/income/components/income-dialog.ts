@@ -4,6 +4,8 @@ import { FormController } from '../../../shared/controllers/FormController.js';
 import { ScopedElementsMixin } from '@open-wc/scoped-elements/lit-element.js';
 import { Income, IncomeStepConfig } from '../types.js';
 import { IncomeSchemaEngine, FieldDefinition } from '../engine/income-schema-engine.js';
+import { IncomeSpecification } from '../domain/income-specification.js';
+import { ValidationEngine } from '../domain/validation-engine.js';
 import { saveIncomeApi } from '../api/income-api.js';
 
 
@@ -17,7 +19,6 @@ import { LionRadioGroup, LionRadio } from '@lion/ui/radio-group.js';
 import { LionCheckboxGroup, LionCheckbox } from '@lion/ui/checkbox-group.js';
 import { LionInputDatepicker } from '@lion/ui/input-datepicker.js';
 import { LionFieldset } from '@lion/ui/fieldset.js';
-import { Required } from '@lion/ui/form-core.js';
 
 /**
  * Typed shape of the income form's `modelValue`.
@@ -76,17 +77,36 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
       flex-direction: column;
       gap: 1.5rem;
     }
+    .draft-warning {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #92400e;
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      padding: 0.75rem;
+      border-radius: 6px;
+      margin-top: 1rem;
+      font-size: 0.875rem;
+    }
   `;
 
   @property({ type: Object }) income?: Income;
   @property({ type: Boolean }) opened = false;
   @property({ type: String }) invokerText = 'Dodaj Dochód';
   @property({ type: Object }) config?: IncomeStepConfig;
+  /**
+   * When `true`, the dialog opens itself (used to surface an incomplete
+   * draft income found during step validation). A single
+   * `auto-open-handled` event is dispatched so the parent can clear the flag.
+   */
+  @property({ type: Boolean }) autoOpen = false;
 
   @state() private _source = '';
   @state() private _durationType = '';
   @state() private _isSaving = false;
   @state() private _errorMessage = '';
+  @state() private _isIncompleteDraft = false;
 
 
   /**
@@ -107,6 +127,14 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
   });
 
   async updated(changedProperties: Map<string, any>) {
+    if (changedProperties.has('autoOpen') && this.autoOpen && !this.opened) {
+      this.opened = true;
+      this.dispatchEvent(new CustomEvent('auto-open-handled', {
+        bubbles: true,
+        composed: true,
+      }));
+    }
+
     const openedChanged = changedProperties.has('opened');
     const incomeChanged = changedProperties.has('income');
 
@@ -120,13 +148,37 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
         this._durationType = this.income.durationDetails?.type || '';
         await this.updateComplete;
         this.#formCtrl.form.modelValue = IncomeSchemaEngine.mapIncomeToFormValue(this.income, this.config);
+        this._syncDraftState();
       } else if (openedChanged) {
         this._source = '';
         this._durationType = '';
+        this._isIncompleteDraft = false;
         await this.updateComplete;
         this.#formCtrl.form.resetGroup();
       }
     }
+  }
+
+  /**
+   * Draft check: the Headless Validation Engine evaluates the raw `Income`
+   * from the store against the Income Specification. For incomplete drafts
+   * the warning banner is shown and `FormController.validate()` reveals the
+   * missing fields (focus + scroll) immediately on open.
+   */
+  private _syncDraftState(): void {
+    if (!this.income) {
+      this._isIncompleteDraft = false;
+      return;
+    }
+    this._isIncompleteDraft = !ValidationEngine.isIncomeValid(this.income, this.config);
+    if (this._isIncompleteDraft) {
+      this.#formCtrl.validate();
+    }
+  }
+
+  /** Fresh Lion validator instances from the Income Specification. */
+  #validatorsFor(fieldName: string) {
+    return IncomeSpecification.createValidators(this._source, fieldName, this.config);
   }
 
   private async _handleSourceChange(ev: Event) {
@@ -247,13 +299,19 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
         <div slot="content" class="dialog-content">
           <h3>${this.income ? 'Edytuj Dochód' : 'Dodaj Dochód'}</h3>
 
+          ${this._isIncompleteDraft && this.income ? html`
+            <div class="draft-warning" role="status">
+              ⚠️ Ten dochód jest niekompletny — uzupełnij zaznaczone pola i zapisz ponownie.
+            </div>
+          ` : ''}
+
           <lion-form>
             <form>
 
               <lion-select
                 name="source"
                 label="Źródło dochodu"
-                .validators="${[new Required()]}"
+                .validators="${this.#validatorsFor('source')}"
                 @model-value-changed="${this._handleSourceChange}"
               >
                 <select slot="input">
@@ -272,13 +330,13 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
                   <lion-input-amount
                     name="amount"
                     label="Kwota"
-                    .validators="${IncomeSchemaEngine.getValidatorsForField(this.config, this._source, 'amount')}"
+                    .validators="${this.#validatorsFor('amount')}"
                   ></lion-input-amount>
-                  
+
                   <lion-select
                     name="currency"
                     label="Waluta"
-                    .validators="${IncomeSchemaEngine.getValidatorsForField(this.config, this._source, 'currency')}"
+                    .validators="${this.#validatorsFor('currency')}"
                   >
                     <select slot="input">
                       <option value="PLN">PLN</option>
@@ -291,7 +349,7 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
                     <lion-radio-group
                       name="type"
                       label="Czas trwania"
-                      .validators="${[new Required()]}"
+                      .validators="${this.#validatorsFor('durationDetails.type')}"
                       @model-value-changed="${this._handleDurationChange}"
                     >
                       <lion-radio label="Określony"   .choiceValue="${'okreslony'}"></lion-radio>
@@ -302,7 +360,7 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
                       <lion-input-datepicker
                         name="endDate"
                         label="Data końcowa"
-                        .validators="${[new Required()]}"
+                        .validators="${this.#validatorsFor('durationDetails.endDate')}"
                       ></lion-input-datepicker>
                     ` : ''}
                   </lion-fieldset>
@@ -310,7 +368,7 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
                   <lion-checkbox-group
                     name="paymentMethod"
                     label="Metoda płatności"
-                    .validators="${[new Required()]}"
+                    .validators="${this.#validatorsFor('paymentMethod')}"
                   >
                     <lion-checkbox label="Przelew" .choiceValue="${'przelew'}"></lion-checkbox>
                     <lion-checkbox label="Gotówka" .choiceValue="${'gotowka'}"></lion-checkbox>

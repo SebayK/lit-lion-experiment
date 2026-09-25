@@ -4,6 +4,7 @@ import { ref, createRef } from 'lit/directives/ref.js';
 import { ScopedElementsMixin } from '@open-wc/scoped-elements/lit-element.js';
 import { Income } from '../types.js';
 import { IncomeDialog } from './income-dialog.js';
+import { ValidationEngine } from '../domain/validation-engine.js';
 
 import { LionFieldset } from '@lion/ui/fieldset.js';
 import { LionButton } from '@lion/ui/button.js';
@@ -47,10 +48,23 @@ export class IncomeTable extends ScopedElementsMixin(LitElement) {
       margin-top: 1rem;
       border-radius: 4px;
     }
+    .badge-incomplete {
+      display: inline-block;
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fcd34d;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
   `;
 
   @property({ type: Array }) incomes: Income[] = [];
   @property({ type: Object }) config?: any;
+  /** id of an income that failed step validation — its dialog auto-opens */
+  @property({ type: String }) invalidIncomeId?: string;
 
   private _fieldsetRef = createRef<any>();
 
@@ -96,6 +110,11 @@ export class IncomeTable extends ScopedElementsMixin(LitElement) {
     return 'Nieokreślony';
   }
 
+  /** Headless evaluation — a draft income missing required fields gets a badge. */
+  private isIncomplete(income: Income): boolean {
+    return !ValidationEngine.isIncomeValid(income, this.config);
+  }
+
   render() {
     return html`
       <lion-fieldset ${ref(this._fieldsetRef)} name="incomesList" label="Wykaz Dochodów">
@@ -108,6 +127,7 @@ export class IncomeTable extends ScopedElementsMixin(LitElement) {
                   <th>Źródło</th>
                   <th>Czas trwania</th>
                   <th>Kwota</th>
+                  <th>Status</th>
                   <th>Akcje</th>
                 </tr>
               </thead>
@@ -117,8 +137,19 @@ export class IncomeTable extends ScopedElementsMixin(LitElement) {
                     <td>${this.formatSource(income.source)}</td>
                     <td>${this.formatDuration(income.durationDetails)}</td>
                     <td>${income.amount} PLN</td>
+                    <td>
+                      ${this.isIncomplete(income)
+                        ? html`<span class="badge-incomplete">Wymaga uzupełnienia</span>`
+                        : ''}
+                    </td>
                      <td class="actions">
-                      <income-dialog .config="${this.config}" .income="${income}" invokerText="Edytuj" @save="${(e: CustomEvent) => this.dispatchEvent(new CustomEvent('save', { detail: e.detail, bubbles: true, composed: true }))}"></income-dialog>
+                      <income-dialog
+                        .config="${this.config}"
+                        .income="${income}"
+                        .autoOpen="${this.invalidIncomeId === income.id}"
+                        invokerText="Edytuj"
+                        @save="${(e: CustomEvent) => this.dispatchEvent(new CustomEvent('save', { detail: e.detail, bubbles: true, composed: true }))}"
+                      ></income-dialog>
                       <lion-button variant="danger" @click="${() => this.handleDelete(income.id)}">Usuń</lion-button>
                     </td>
                   </tr>

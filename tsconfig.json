@@ -8,6 +8,7 @@
     "strict": true,
     "experimentalDecorators": true,
     "skipLibCheck": true,
+    "types": ["mocha"],
     "outDir": "dist"
   },
   "include": ["src/**/*.ts"]

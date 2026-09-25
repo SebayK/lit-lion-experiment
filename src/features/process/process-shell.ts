@@ -5,6 +5,7 @@ import { Routes } from "@lit-labs/router";
 import { ProcessController } from "./controllers/process-controller.js";
 import { processContext } from "./context.js";
 import type { ProcessStep } from "./types.js";
+import "./components/process-live-summary.js";
 
 @customElement("process-shell")
 export class ProcessShell extends LitElement {
@@ -23,6 +24,7 @@ export class ProcessShell extends LitElement {
   // Step labels map for Polish translations
   private readonly STEP_LABELS: Record<ProcessStep, string> = {
     'calculation': 'Kalkulacja',
+    'income': 'Dochody',
     'email-verification': 'Weryfikacja Email',
     'phone-verification': 'Weryfikacja Telefonu',
     'dashboard': 'Panel'
@@ -85,6 +87,50 @@ export class ProcessShell extends LitElement {
         return true;
       },
       render: () => html`<calculation-step-page></calculation-step-page>`,
+    },
+
+    // Income step - with guard
+    {
+      path: "income",
+      enter: async () => {
+        await import("./pages/income-step-page.js");
+        try {
+          if (!this.processCtrl.canAccess('income')) {
+            const redirectTo = this.processCtrl.getFirstUncompletedStep();
+            this._showRedirectNotification(redirectTo);
+            this.routes.goto(`/process/${redirectTo}`);
+            return false;
+          }
+        } catch (error) {
+          console.error('[RouteGuard] Error checking access:', error);
+          this._showRedirectNotification('calculation');
+          this.routes.goto('/process/calculation');
+          return false;
+        }
+        return true;
+      },
+      render: () => html`<income-step-page></income-step-page>`,
+    },
+    {
+      path: "/income",
+      enter: async () => {
+        await import("./pages/income-step-page.js");
+        try {
+          if (!this.processCtrl.canAccess('income')) {
+            const redirectTo = this.processCtrl.getFirstUncompletedStep();
+            this._showRedirectNotification(redirectTo);
+            this.routes.goto(`/process/${redirectTo}`);
+            return false;
+          }
+        } catch (error) {
+          console.error('[RouteGuard] Error checking access:', error);
+          this._showRedirectNotification('calculation');
+          this.routes.goto('/process/calculation');
+          return false;
+        }
+        return true;
+      },
+      render: () => html`<income-step-page></income-step-page>`,
     },
 
     // Email verification step - with guard
@@ -232,24 +278,6 @@ export class ProcessShell extends LitElement {
     },
 
     // Backward compatibility redirects
-    {
-      path: "income",
-      enter: async () => {
-        // Redirect old route to new calculation route
-        this.routes.goto("/process/calculation");
-        return false;
-      },
-      render: () => html``,
-    },
-    {
-      path: "/income",
-      enter: async () => {
-        // Redirect old route to new calculation route
-        this.routes.goto("/process/calculation");
-        return false;
-      },
-      render: () => html``,
-    },
     {
       path: "summary",
       enter: async () => {
@@ -474,6 +502,7 @@ export class ProcessShell extends LitElement {
   private getActiveStep(): ProcessStep | "start" {
     const path = window.location.pathname;
     if (path.includes("/process/calculation")) return "calculation";
+    if (path.includes("/process/income")) return "income";
     if (path.includes("/process/email-verification")) return "email-verification";
     if (path.includes("/process/phone-verification")) return "phone-verification";
     if (path.includes("/process/dashboard")) return "dashboard";
@@ -535,12 +564,17 @@ export class ProcessShell extends LitElement {
         <nav class="stepper" aria-label="Kroki procesu">
           ${this._renderStepItem('calculation', 0, 'Kalkulacja')}
           <div class="step-divider"></div>
-          ${this._renderStepItem('email-verification', 1, 'Email')}
+          ${this._renderStepItem('income', 1, 'Dochody')}
           <div class="step-divider"></div>
-          ${this._renderStepItem('phone-verification', 2, 'Telefon')}
+          ${this._renderStepItem('email-verification', 2, 'Email')}
           <div class="step-divider"></div>
-          ${this._renderStepItem('dashboard', 3, 'Panel')}
+          ${this._renderStepItem('phone-verification', 3, 'Telefon')}
+          <div class="step-divider"></div>
+          ${this._renderStepItem('dashboard', 4, 'Panel')}
         </nav>
+
+        <!-- Live Reactive Summary Subscriber Widget -->
+        <process-live-summary></process-live-summary>
 
         <!-- Nested Router Outlet -->
         <main @request-navigate=${(e: CustomEvent<string>) => this.routes.goto(e.detail)}>
