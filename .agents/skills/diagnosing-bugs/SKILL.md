@@ -9,6 +9,10 @@ A discipline for hard bugs. Skip phases only when explicitly justified.
 
 When exploring the codebase, read `CONTEXT.md` (if it exists) to get a clear mental model of the relevant modules, and check ADRs in the area you're touching.
 
+## Codebase context
+
+Before Phase 1, call the Skill tool with `"repomix-context"` to pack the relevant part of the codebase. Ask the user which paths or modules are closest to the bug, and whether to use `--compress`. Use the snapshot in Phase 3 to generate hypotheses and in Phase 4 to locate instrumentation points.
+
 ## Redact
 
 This skill has you show commands, outputs and captured artifacts. **Redact every secret first**: write `<REDACTED>` in its place. Build loops against env vars, so the credential stays in the environment rather than in what you show. Captured artifacts carry auth headers: quote only the lines that carry the signal.

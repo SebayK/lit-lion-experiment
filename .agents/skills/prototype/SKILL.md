@@ -7,6 +7,10 @@ description: Build a throwaway prototype to answer a design question. Use when t
 
 A prototype is **throwaway code that answers a question**. The question decides the shape.
 
+## Codebase context
+
+Before picking a branch, call the Skill tool with `"repomix-context"` to pack the area of the codebase the prototype will sit next to. Ask the user which path contains the module or page being prototyped, and whether to use `--compress`. Use the snapshot to read existing patterns (routing convention, state shape, component style) so the prototype fits without creating new structure.
+
 ## Pick a branch
 
 Identify which question is being answered, using the user's prompt, the surrounding code, or by asking if the user is around:

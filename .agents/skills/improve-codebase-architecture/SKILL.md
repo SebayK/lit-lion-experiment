@@ -13,6 +13,10 @@ This command is _informed_ by the project's domain model and built on a shared d
 - Call the Skill tool with "codebase-design" for the architecture vocabulary (**module**, **interface**, **depth**, **seam**, **adapter**, **leverage**, **locality**) and its principles (the deletion test, "the interface is the test surface", "one adapter = hypothetical seam, two = real"). Use these terms exactly in every suggestion, and don't drift into "component," "service," "API," or "boundary."
 - The domain language in `CONTEXT.md` gives names to good seams; ADRs in `docs/adr/` record decisions this command should not re-litigate.
 
+## Codebase context
+
+Before exploring, call the Skill tool with `"repomix-context"` to build a snapshot of the codebase. Ask the user which paths to focus on (or use the hot-spot heuristic from step 1 if they leave it blank), and whether to use `--compress`. Use the snapshot in step 1 to identify shallow modules and friction without spawning a sub-agent for raw file traversal.
+
 ## Process
 
 ### 1. Explore

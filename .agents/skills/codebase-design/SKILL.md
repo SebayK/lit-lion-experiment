@@ -7,6 +7,10 @@ description: Shared vocabulary for designing deep modules. Use when the user wan
 
 Design **deep modules**: a lot of behaviour behind a small interface, placed at a clean seam, testable through that interface. Use this language and these principles wherever code is being designed or restructured. The aim is leverage for callers, locality for maintainers, and testability for everyone.
 
+## Codebase context
+
+When applying this skill to a real module (not just reading it as vocabulary), call the Skill tool with `"repomix-context"` first. Ask the user which paths contain the module or seam under discussion, and whether to use `--compress`. Use the snapshot to read existing interfaces, understand collaborators, and apply the depth/seam analysis to actual code rather than an imagined shape.
+
 ## Glossary
 
 Use these terms exactly: don't substitute "component," "service," "API," or "boundary." Consistent language is the whole point.
