@@ -6,7 +6,7 @@ import { Income, IncomeStepConfig } from '../types.js';
 import { IncomeSchemaEngine, FieldDefinition } from '../engine/income-schema-engine.js';
 import { IncomeSpecification } from '../domain/income-specification.js';
 import { ValidationEngine } from '../domain/validation-engine.js';
-import { saveIncomeApi } from '../api/income-api.js';
+import { IncomeSubmissionController } from '../controllers/income-submission-controller.js';
 
 
 import { LionDialog } from '@lion/ui/dialog.js';
@@ -104,9 +104,8 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
 
   @state() private _source = '';
   @state() private _durationType = '';
-  @state() private _isSaving = false;
-  @state() private _errorMessage = '';
   @state() private _isIncompleteDraft = false;
+  private readonly submissionController = new IncomeSubmissionController(this);
 
 
   /**
@@ -118,12 +117,6 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
   readonly #formCtrl = new FormController<IncomeFormValues>(this, {
     focusOnError: true,
     scrollToError: true,
-    onValidate: (result) => {
-      console.group('📋 [FormController] Validation Result');
-      console.log('isValid:', result.isValid);
-      console.log('errors:', result.errors);
-      console.groupEnd();
-    },
   });
 
   async updated(changedProperties: Map<string, any>) {
@@ -211,52 +204,26 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
   private async _handleSubmitClick(ev: Event) {
     ev.preventDefault();
 
-    console.group('🚀 [IncomeDialog] Submitting Form');
     const validation = this.#formCtrl.validate();
     const form = this.#formCtrl.form;
-
-    console.log('Form modelValue:', form.modelValue);
-    console.log('Form serializedValue:', form.serializedValue);
-
     if (!validation.isValid) {
-      console.warn('❌ Form validation failed! Errors:', validation.errors);
-      console.groupEnd();
       return;
     }
 
-    const raw = form.serializedValue;
-    const newIncome = IncomeSchemaEngine.mapFormToIncome(raw, this.income, this.config);
+    const savedIncome = await this.submissionController.save(form.serializedValue, this.income, this.config);
+    if (!savedIncome) return;
 
-    console.log('✅ Form valid! Sending POST /api/income...', newIncome);
-    
-    this._isSaving = true;
-    this._errorMessage = '';
+    this.dispatchEvent(new CustomEvent('save', {
+      detail: savedIncome,
+      bubbles: true,
+      composed: true,
+    }));
+    this.opened = false;
 
-    try {
-      const savedIncome = await saveIncomeApi(newIncome);
-
-      console.log('✅ API returned saved Income object:', savedIncome);
-      console.groupEnd();
-
-      this.dispatchEvent(new CustomEvent('save', {
-        detail: savedIncome,
-        bubbles: true,
-        composed: true,
-      }));
-
-      this.opened = false;
-
-      if (!this.income) {
-        form.resetGroup();
-        this._source = '';
-        this._durationType = '';
-      }
-    } catch (err) {
-      console.error('❌ Failed to save income via API:', err);
-      console.groupEnd();
-      this._errorMessage = 'Nie udało się zapisać dochodu. Spróbuj ponownie.';
-    } finally {
-      this._isSaving = false;
+    if (!this.income) {
+      form.resetGroup();
+      this._source = '';
+      this._durationType = '';
     }
   }
 
@@ -289,6 +256,8 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
   render() {
     const sourceOptions = this.config?.availableSources || [];
     const dynamicFields = IncomeSchemaEngine.getFieldsForSource(this.config, this._source);
+    const hasDuration = IncomeSpecification.getFieldsForSource(this._source, this.config)
+      .some(field => field.name === 'durationDetails.type');
 
     return html`
       <lion-dialog
@@ -345,7 +314,7 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
                     </select>
                   </lion-select>
 
-                  <lion-fieldset name="durationDetails">
+                  ${hasDuration ? html`<lion-fieldset name="durationDetails">
                     <lion-radio-group
                       name="type"
                       label="Czas trwania"
@@ -363,7 +332,7 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
                         .validators="${this.#validatorsFor('durationDetails.endDate')}"
                       ></lion-input-datepicker>
                     ` : ''}
-                  </lion-fieldset>
+                  </lion-fieldset>` : ''}
 
                   <lion-checkbox-group
                     name="paymentMethod"
@@ -377,16 +346,16 @@ export class IncomeDialog extends ScopedElementsMixin(LitElement) {
                 </div>
               ` : ''}
 
-              ${this._errorMessage ? html`
+              ${this.submissionController.errorMessage ? html`
                 <div style="color: #dc2626; background: #fef2f2; border: 1px solid #fca5a5; padding: 0.75rem; border-radius: 6px; margin-top: 1rem; font-size: 0.875rem;">
-                  ${this._errorMessage}
+                  ${this.submissionController.errorMessage}
                 </div>
               ` : ''}
 
               <div class="form-buttons">
-                <lion-button type="button" ?disabled="${this._isSaving}" @click="${this._handleClose}">Anuluj</lion-button>
-                <lion-button variant="primary" ?disabled="${this._isSaving}" @click="${this._handleSubmitClick}">
-                  ${this._isSaving ? 'Zapisywanie...' : 'Zapisz'}
+                <lion-button type="button" ?disabled="${this.submissionController.isSaving}" @click="${this._handleClose}">Anuluj</lion-button>
+                <lion-button variant="primary" ?disabled="${this.submissionController.isSaving}" @click="${this._handleSubmitClick}">
+                  ${this.submissionController.isSaving ? 'Zapisywanie...' : 'Zapisz'}
                 </lion-button>
               </div>
 

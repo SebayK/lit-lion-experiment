@@ -2,7 +2,7 @@ import { LitElement, html, css } from 'lit';
 import { property } from 'lit/decorators.js';
 import { ref, createRef } from 'lit/directives/ref.js';
 import { ScopedElementsMixin } from '@open-wc/scoped-elements/lit-element.js';
-import { Income } from '../types.js';
+import { Income, IncomeStepConfig } from '../types.js';
 import { IncomeDialog } from './income-dialog.js';
 import { ValidationEngine } from '../domain/validation-engine.js';
 
@@ -62,7 +62,7 @@ export class IncomeTable extends ScopedElementsMixin(LitElement) {
   `;
 
   @property({ type: Array }) incomes: Income[] = [];
-  @property({ type: Object }) config?: any;
+  @property({ type: Object }) config?: IncomeStepConfig;
   /** id of an income that failed step validation — its dialog auto-opens */
   @property({ type: String }) invalidIncomeId?: string;
 
@@ -94,6 +94,8 @@ export class IncomeTable extends ScopedElementsMixin(LitElement) {
   }
 
   private formatSource(source: string) {
+    const configuredLabel = this.config?.availableSources.find(item => item.sourceId === source)?.label;
+    if (configuredLabel) return configuredLabel;
     const map: Record<string, string> = {
       'umowa_o_prace': 'Umowa o pracę',
       'zlecenie': 'Umowa zlecenie',
@@ -136,7 +138,7 @@ export class IncomeTable extends ScopedElementsMixin(LitElement) {
                   <tr>
                     <td>${this.formatSource(income.source)}</td>
                     <td>${this.formatDuration(income.durationDetails)}</td>
-                    <td>${income.amount} PLN</td>
+                    <td>${income.amount} ${income.currency ?? 'PLN'}</td>
                     <td>
                       ${this.isIncomplete(income)
                         ? html`<span class="badge-incomplete">Wymaga uzupełnienia</span>`
@@ -148,7 +150,6 @@ export class IncomeTable extends ScopedElementsMixin(LitElement) {
                         .income="${income}"
                         .autoOpen="${this.invalidIncomeId === income.id}"
                         invokerText="Edytuj"
-                        @save="${(e: CustomEvent) => this.dispatchEvent(new CustomEvent('save', { detail: e.detail, bubbles: true, composed: true }))}"
                       ></income-dialog>
                       <lion-button variant="danger" @click="${() => this.handleDelete(income.id)}">Usuń</lion-button>
                     </td>

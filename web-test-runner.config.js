@@ -1,4 +1,5 @@
 import { esbuildPlugin } from '@web/dev-server-esbuild';
+import { mockPlugin } from '@web/mocks/plugins.js';
 
 export default {
   nodeResolve: true,
@@ -14,6 +15,7 @@ export default {
       </head>
     </html>`,
   plugins: [
+    mockPlugin(),
     {
       name: 'ts-resolver',
       resolveImport({ source, context }) {
