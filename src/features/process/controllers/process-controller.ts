@@ -1,5 +1,5 @@
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
-import type { CalculationData, ProcessStep, StepStatus } from '../types.js';
+import type { CalculationData, ProcessStep, StepStatus, EmailVerificationResult } from '../types.js';
 
 export interface ProcessControllerOptions {
   onNavigate?: (step: ProcessStep) => void;
@@ -21,11 +21,13 @@ export class ProcessController implements ReactiveController {
   private readonly host: ReactiveControllerHost;
   private readonly options?: ProcessControllerOptions;
   private readonly subscribers = new Set<ReactiveControllerHost>();
+  private readonly resetCleanups = new Set<() => void>();
 
   // Domain state
   applicationId = createApplicationId();
   calculationData: CalculationData | null = null;
   email: string | null = null;
+  emailVerificationToken: string | null = null;
   phone: string | null = null;
 
   // Step progression statuses
@@ -58,6 +60,7 @@ export class ProcessController implements ReactiveController {
     console.log('🎯 [ProcessController] hostDisconnected');
     // Clean-up if needed
     this.subscribers.clear();
+    this.reset();
   }
 
   /**
@@ -70,6 +73,12 @@ export class ProcessController implements ReactiveController {
     return () => {
       this.subscribers.delete(subscriber);
     };
+  }
+
+  /** Registers process-owned cleanup, independent of any view's mounting lifetime. */
+  registerResetCleanup(cleanup: () => void): () => void {
+    this.resetCleanups.add(cleanup);
+    return () => this.resetCleanups.delete(cleanup);
   }
 
   /**
@@ -156,10 +165,14 @@ export class ProcessController implements ReactiveController {
   /**
    * Completes email verification.
    */
-  completeEmailVerification(email: string): void {
-    this.email = email;
+  completeEmailVerification(result: EmailVerificationResult): boolean {
+    if (result.applicationId !== this.applicationId || !result.email || !result.verificationToken.trim() ||
+        !this.canAccess('email-verification') || this.stepStatuses['email-verification'] === 'completed') return false;
+    this.email = result.email;
+    this.emailVerificationToken = result.verificationToken;
     this.stepStatuses['email-verification'] = 'completed';
     this._notify();
+    return true;
   }
 
   /**
@@ -178,6 +191,7 @@ export class ProcessController implements ReactiveController {
     this.applicationId = createApplicationId();
     this.calculationData = null;
     this.email = null;
+    this.emailVerificationToken = null;
     this.phone = null;
     this.stepStatuses = {
       calculation: 'pending',
@@ -187,6 +201,9 @@ export class ProcessController implements ReactiveController {
       'phone-verification': 'pending',
       dashboard: 'pending',
     };
+    const cleanups = [...this.resetCleanups];
+    this.resetCleanups.clear();
+    for (const cleanup of cleanups) cleanup();
     this._notify();
   }
 

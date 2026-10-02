@@ -1,6 +1,6 @@
 export type AuthenticationChannel = 'email' | 'phone';
 
-export type AuthenticationStatus = 'idle' | 'sending' | 'awaiting-code' | 'send-error';
+export type AuthenticationStatus = 'idle' | 'sending' | 'awaiting-code' | 'send-error' | 'verifying' | 'invalid-code' | 'success';
 
 export interface CodeChallenge {
   challengeId: string;
@@ -16,6 +16,24 @@ export interface RequestCode {
 
 export interface AuthenticationAdapter {
   requestCode(request: RequestCode): Promise<CodeChallenge>;
+  confirmCode(request: ConfirmCode): Promise<VerificationResult>;
+}
+
+export interface ConfirmCode {
+  applicationId: string;
+  challengeId: string;
+  code: string;
+}
+
+export interface VerificationResult {
+  verificationToken: string;
+}
+
+export const CODE_PATTERN_SOURCE = '[1-9][0-9]{5}';
+const codePattern = new RegExp(`^${CODE_PATTERN_SOURCE}$`);
+
+export function isValidCode(code: string): boolean {
+  return code.length === 6 && codePattern.test(code);
 }
 
 export interface AuthenticationModuleOptions {
@@ -42,12 +60,14 @@ export class AuthenticationModule {
   private readonly now: () => number;
   private readonly subscribers = new Set<AuthenticationSubscriber>();
   private requestInFlight?: Promise<void>;
+  private confirmationInFlight?: Promise<void>;
   private requestVersion = 0;
 
   status: AuthenticationStatus = 'idle';
   contact: string | null = null;
   challenge: CodeChallenge | null = null;
   error: Error | null = null;
+  result: VerificationResult | null = null;
 
   constructor(options: AuthenticationModuleOptions) {
     this.applicationId = options.applicationId;
@@ -67,13 +87,15 @@ export class AuthenticationModule {
       return this.requestInFlight;
     }
 
-    if (this.status === 'awaiting-code' && this.contact === contact) {
+    if (this.challenge && this.contact === contact) {
       return Promise.resolve();
     }
 
     this.contact = contact;
     this.challenge = null;
     this.error = null;
+    this.result = null;
+    this.confirmationInFlight = undefined;
     this.status = 'sending';
     this.notify();
     const requestVersion = ++this.requestVersion;
@@ -109,6 +131,48 @@ export class AuthenticationModule {
     return this.status === 'sending';
   }
 
+  get canConfirm(): boolean {
+    return this.challenge !== null && ['awaiting-code', 'invalid-code'].includes(this.status);
+  }
+
+  confirm(code: string): Promise<void> {
+    if (this.status === 'verifying' && this.confirmationInFlight) return this.confirmationInFlight;
+    if (!this.canConfirm) return Promise.resolve();
+    if (!isValidCode(code)) {
+      this.error = new Error('Kod musi zawierać sześć cyfr i nie może zaczynać się od zera.');
+      this.status = 'invalid-code';
+      this.notify();
+      return Promise.resolve();
+    }
+    this.error = null;
+    this.status = 'verifying';
+    const requestVersion = this.requestVersion;
+    const challengeId = this.challenge!.challengeId;
+    this.notify();
+    const confirmation = Promise.resolve().then(() => this.adapter.confirmCode({
+        applicationId: this.applicationId,
+        challengeId,
+        code,
+      }))
+      .then(result => {
+        if (requestVersion !== this.requestVersion) return;
+        this.result = result;
+        this.status = 'success';
+      })
+      .catch(error => {
+        if (requestVersion !== this.requestVersion) return;
+        this.error = error instanceof Error ? error : new Error('Nie udało się potwierdzić kodu.');
+        this.status = 'invalid-code';
+      })
+      .then(() => {
+        if (requestVersion !== this.requestVersion) return;
+        this.confirmationInFlight = undefined;
+        this.notify();
+      });
+    this.confirmationInFlight = confirmation;
+    return confirmation;
+  }
+
   get canResend(): boolean {
     if (!this.challenge || this.status !== 'awaiting-code') {
       return false;
@@ -123,6 +187,8 @@ export class AuthenticationModule {
     this.contact = null;
     this.challenge = null;
     this.error = null;
+    this.result = null;
+    this.confirmationInFlight = undefined;
     this.requestInFlight = undefined;
     this.notify();
   }

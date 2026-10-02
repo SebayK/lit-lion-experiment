@@ -1,5 +1,5 @@
 import { http } from '@web/mocks/http.js';
-import type { AuthenticationChannel, CodeChallenge, RequestCode } from '../features/authentication/authentication-module.js';
+import { isValidCode, type AuthenticationChannel, type CodeChallenge, type RequestCode, type ConfirmCode } from '../features/authentication/authentication-module.js';
 
 export interface MockAuthenticationConfig {
   correctCode?: string;
@@ -9,7 +9,7 @@ let correctMockCode = '123456';
 
 /** Configures backend-only test data. The code is never included in responses. */
 export function configureMockAuthentication(config: MockAuthenticationConfig): void {
-  if (config.correctCode !== undefined && !/^[1-9][0-9]{5}$/.test(config.correctCode)) {
+  if (config.correctCode !== undefined && !isValidCode(config.correctCode)) {
     throw new Error('Mock authentication code must contain six digits and not start with zero.');
   }
 
@@ -37,6 +37,16 @@ function isAuthenticationChannel(value: unknown): value is AuthenticationChannel
 }
 
 export const authenticationHandlers = [
+  http.post('/api/authentication/code/confirm', async ({ request }) => {
+    const body = (await request.json()) as Partial<ConfirmCode>;
+    const active = typeof body.challengeId === 'string' ? challenges.get(body.challengeId) : undefined;
+    if (!active || body.applicationId !== active.request.applicationId ||
+        typeof body.code !== 'string' || !isValidCode(body.code) || body.code !== active.code) {
+      return Response.json({ message: 'Niepoprawny kod. Spróbuj ponownie.' }, { status: 400 });
+    }
+    challenges.delete(active.challenge.challengeId);
+    return Response.json({ verificationToken: createChallengeId() });
+  }),
   http.post('/api/authentication/code/request', async ({ request }) => {
     const body = (await request.json()) as Partial<RequestCode>;
     if (!body.applicationId || !isAuthenticationChannel(body.channel) || !body.contact) {

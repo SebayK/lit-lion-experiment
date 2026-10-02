@@ -1,6 +1,6 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { AuthenticationModule, maskContact } from './authentication-module.js';
+import { AuthenticationModule, CODE_PATTERN_SOURCE, isValidCode, maskContact } from './authentication-module.js';
 
 @customElement('authentication-code-verification')
 export class AuthenticationCodeVerification extends LitElement {
@@ -80,14 +80,19 @@ export class AuthenticationCodeVerification extends LitElement {
       this.code = '';
       this.renderedChallengeId = undefined;
     }
-  }
-
-  updated(): void {
     const challengeId = this.module?.challenge?.challengeId;
-    if (challengeId && challengeId !== this.renderedChallengeId) {
+    if (challengeId !== this.renderedChallengeId) {
       this.renderedChallengeId = challengeId;
       this.code = '';
     }
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    this.unsubscribe?.();
+    this.unsubscribe = this.module?.subscribe(() => this.requestUpdate());
+    this.code = '';
+    this.requestUpdate();
   }
 
   disconnectedCallback(): void {
@@ -98,13 +103,20 @@ export class AuthenticationCodeVerification extends LitElement {
 
   private handleCodeInput(event: Event): void {
     const input = event.target as HTMLInputElement;
-    this.code = input.value.replace(/\D/g, '').slice(0, 6);
+    this.code = input.value;
   }
 
-  private handleConfirm(): void {
+  private async handleConfirm(event: Event): Promise<void> {
+    event.preventDefault();
+    const module = this.module;
+    if (!module?.canConfirm || !isValidCode(this.code)) return;
+    const challengeId = module.challenge?.challengeId;
+    await module.confirm(this.code);
+    if (!this.isConnected || module !== this.module || module.challenge?.challengeId !== challengeId ||
+        module.status !== 'success' || !module.result) return;
     this.dispatchEvent(
-      new CustomEvent('authentication-confirm', {
-        detail: { code: this.code },
+      new CustomEvent('authentication-success', {
+        detail: module.result,
         bubbles: true,
         composed: true,
       }),
@@ -125,6 +137,10 @@ export class AuthenticationCodeVerification extends LitElement {
       return html`<div role="alert">${module.error?.message ?? 'Nie udało się wysłać kodu.'}</div>`;
     }
 
+    if (module.status === 'success') {
+      return html`<div role="status">Kod został potwierdzony.</div>`;
+    }
+
     if (!module.contact) {
       return html``;
     }
@@ -132,7 +148,7 @@ export class AuthenticationCodeVerification extends LitElement {
     return html`
       <div class="challenge">
         <div>Kod został wysłany na <strong>${maskContact(module.channel, module.contact)}</strong>.</div>
-        <div class="form-group">
+        <form class="form-group" @submit=${this.handleConfirm}>
           <label for="code">Kod weryfikacyjny</label>
           <input
             id="code"
@@ -140,13 +156,21 @@ export class AuthenticationCodeVerification extends LitElement {
             inputmode="numeric"
             autocomplete="one-time-code"
             maxlength="6"
+            pattern=${CODE_PATTERN_SOURCE}
+            required
+            aria-describedby="code-help code-error"
+            aria-invalid=${module.status === 'invalid-code' ? 'true' : 'false'}
+            ?disabled=${module.status === 'verifying'}
             .value=${this.code}
             @input=${this.handleCodeInput}
           />
-          <button type="button" ?disabled=${this.code.length !== 6} @click=${this.handleConfirm}>
-            Potwierdź
+          <div id="code-help">Wpisz sześć cyfr. Pierwsza cyfra nie może być zerem.</div>
+          <div id="code-error" role="alert">${module.error?.message ?? ''}</div>
+          ${module.status === 'verifying' ? html`<div role="status">Weryfikacja kodu…</div>` : ''}
+          <button type="submit" ?disabled=${!isValidCode(this.code) || !module.canConfirm}>
+            ${module.status === 'verifying' ? 'Weryfikacja…' : 'Potwierdź'}
           </button>
-        </div>
+        </form>
       </div>
     `;
   }

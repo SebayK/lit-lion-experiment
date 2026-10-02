@@ -17,6 +17,12 @@ export interface CalculationData {
 // Status of each step in the Application Process
 export type StepStatus = 'pending' | 'completed';
 
+export interface EmailVerificationResult {
+  applicationId: string;
+  email: string;
+  verificationToken: string;
+}
+
 export interface ProcessState {
   calculationData: CalculationData | null;
   stepStatuses: Record<ProcessStep, StepStatus>;

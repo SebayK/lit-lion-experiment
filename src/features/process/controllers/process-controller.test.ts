@@ -14,6 +14,36 @@ class MockHost implements ReactiveControllerHost {
 }
 
 describe('ProcessController', () => {
+  it('clears in-memory verification state when the Process Shell disconnects', () => {
+    const controller = new ProcessController(new MockHost());
+    controller.completeCalculation({ loanAmount: 1, periodMonths: 1, monthlyInstallment: 1 });
+    controller.completeClientProfile();
+    controller.completeIncome();
+    const applicationId = controller.applicationId;
+    controller.completeEmailVerification({ applicationId, email: 'jane@example.com', verificationToken: 'token' });
+    controller.hostDisconnected();
+    expect(controller.emailVerificationToken).to.be.null;
+    expect(controller.email).to.be.null;
+    expect(controller.applicationId).not.to.equal(applicationId);
+    expect(controller.canAccess('phone-verification')).to.be.false;
+  });
+  it('accepts an email token only for the active application and clears it on reset', () => {
+    const controller = new ProcessController(new MockHost());
+    controller.completeCalculation({ loanAmount: 1, periodMonths: 1, monthlyInstallment: 1 });
+    controller.completeClientProfile();
+    controller.completeIncome();
+    expect(controller.completeEmailVerification({ applicationId: 'other-application', email: 'jane@example.com', verificationToken: 'token' })).to.be.false;
+    expect(controller.completeEmailVerification({ applicationId: controller.applicationId, email: 'jane@example.com', verificationToken: '' })).to.be.false;
+    expect(controller.canAccess('phone-verification')).to.be.false;
+    expect(controller.completeEmailVerification({ applicationId: controller.applicationId, email: 'jane@example.com', verificationToken: 'opaque-token' })).to.be.true;
+    expect(controller.emailVerificationToken).to.equal('opaque-token');
+    expect(controller.email).to.equal('jane@example.com');
+    expect(controller.canAccess('phone-verification')).to.be.true;
+    expect(controller.canAccess('dashboard')).to.be.false;
+    controller.reset();
+    expect(controller.emailVerificationToken).to.be.null;
+    expect(controller.canAccess('phone-verification')).to.be.false;
+  });
   let host: MockHost;
   let controller: ProcessController;
 
@@ -85,7 +115,7 @@ describe('ProcessController', () => {
       expect(controller.canAccess('email-verification')).to.be.true;
       expect(controller.canAccess('phone-verification')).to.be.false;
 
-      controller.completeEmailVerification('jan.kowalski@example.com');
+      controller.completeEmailVerification({ applicationId: controller.applicationId, email: 'jan.kowalski@example.com', verificationToken: 'email-token' });
       expect(controller.canAccess('phone-verification')).to.be.true;
       expect(controller.canAccess('dashboard')).to.be.false;
     });
@@ -94,7 +124,7 @@ describe('ProcessController', () => {
       controller.completeCalculation(mockCalc);
       controller.completeClientProfile();
       controller.completeIncome();
-      controller.completeEmailVerification('jan.kowalski@example.com');
+      controller.completeEmailVerification({ applicationId: controller.applicationId, email: 'jan.kowalski@example.com', verificationToken: 'email-token' });
       controller.completePhoneVerification('+48123456789');
 
       expect(controller.canAccess('dashboard')).to.be.true;
@@ -121,7 +151,7 @@ describe('ProcessController', () => {
       });
       controller.completeClientProfile();
       controller.completeIncome();
-      controller.completeEmailVerification('a@b.pl');
+      controller.completeEmailVerification({ applicationId: controller.applicationId, email: 'a@b.pl', verificationToken: 'email-token' });
       controller.completePhoneVerification('123456789');
 
       controller.reset();

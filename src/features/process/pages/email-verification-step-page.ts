@@ -6,6 +6,7 @@ import { processContext } from '../context.js';
 import {
   AuthenticationModule,
   type AuthenticationAdapter,
+  type VerificationResult,
 } from '../../authentication/authentication-module.js';
 import { HttpAuthenticationAdapter } from '../../authentication/authentication-adapter.js';
 import '../../authentication/authentication-code-verification.js';
@@ -40,6 +41,18 @@ export class EmailVerificationStepPage extends LitElement {
 
   @state()
   private ownedAuthenticationModule?: AuthenticationModule;
+
+  private subscribedProcess?: ProcessController;
+  private subscribedModule?: AuthenticationModule;
+  private unsubscribeProcess?: () => void;
+  private unsubscribeModule?: () => void;
+  private processApplicationId?: string;
+  private resetCleanup?: {
+    controller: ProcessController;
+    module: AuthenticationModule;
+    applicationId: string;
+    unregister: () => void;
+  };
 
   static styles = css`
     :host {
@@ -177,7 +190,20 @@ export class EmailVerificationStepPage extends LitElement {
     return this.authenticationModule ?? this.ownedAuthenticationModule;
   }
 
-  protected updated(): void {
+  protected willUpdate(): void {
+    if (!this.isConnected) return;
+    if (this.subscribedProcess !== this.processCtrl) {
+      this.unsubscribeProcess?.();
+      this.subscribedProcess = this.processCtrl;
+      this.unsubscribeProcess = this.processCtrl?.subscribe(this);
+    }
+    if (this.processCtrl && this.processApplicationId !== this.processCtrl.applicationId) {
+      if (this.processApplicationId) {
+        this.email = '';
+        this.error = '';
+      }
+      this.processApplicationId = this.processCtrl.applicationId;
+    }
     if (
       this.processCtrl &&
       !this.authenticationModule &&
@@ -189,6 +215,45 @@ export class EmailVerificationStepPage extends LitElement {
         adapter: this.authenticationAdapter,
       });
     }
+    const controller = this.processCtrl;
+    const module = this.activeAuthenticationModule;
+    if (this.resetCleanup?.controller !== controller || this.resetCleanup?.module !== module ||
+        this.resetCleanup?.applicationId !== controller?.applicationId) {
+      this.resetCleanup?.unregister();
+      this.resetCleanup = undefined;
+      if (controller && module) {
+        this.resetCleanup = {
+          controller,
+          module,
+          applicationId: controller.applicationId,
+          unregister: controller.registerResetCleanup(() => module.clear()),
+        };
+      }
+    }
+    if (this.subscribedModule !== this.activeAuthenticationModule) {
+      this.unsubscribeModule?.();
+      this.subscribedModule = this.activeAuthenticationModule;
+      this.unsubscribeModule = this.subscribedModule?.subscribe(() => this.requestUpdate());
+    }
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    this.requestUpdate();
+  }
+
+  disconnectedCallback(): void {
+    this.unsubscribeProcess?.();
+    this.unsubscribeModule?.();
+    this.subscribedProcess = undefined;
+    this.subscribedModule = undefined;
+    // Only page-owned state ends with this page; injected state belongs to its parent.
+    this.ownedAuthenticationModule?.clear();
+    if (this.resetCleanup?.module === this.ownedAuthenticationModule) {
+      this.resetCleanup?.unregister();
+      this.resetCleanup = undefined;
+    }
+    super.disconnectedCallback();
   }
 
   private _handleEmailChange(e: Event): void {
@@ -230,6 +295,18 @@ export class EmailVerificationStepPage extends LitElement {
         composed: true,
       })
     );
+  }
+
+  private _handleAuthenticationSuccess(event: CustomEvent<VerificationResult>): void {
+    event.stopPropagation();
+    const module = this.activeAuthenticationModule;
+    if (!module?.contact || module.status !== 'success' || !module.result ||
+        module.applicationId !== this.processCtrl?.applicationId || module.channel !== 'email') return;
+    this.dispatchEvent(new CustomEvent('email-verification-success', {
+      detail: { applicationId: module.applicationId, email: module.contact, verificationToken: module.result.verificationToken },
+      bubbles: true,
+      composed: true,
+    }));
   }
 
   render() {
@@ -279,7 +356,10 @@ export class EmailVerificationStepPage extends LitElement {
           </button>
         </div>
 
-        <authentication-code-verification .module=${authenticationModule}></authentication-code-verification>
+        <authentication-code-verification
+          .module=${authenticationModule}
+          @authentication-success=${this._handleAuthenticationSuccess}
+        ></authentication-code-verification>
       </div>
     `;
   }
