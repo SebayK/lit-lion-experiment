@@ -102,6 +102,17 @@ describe('ProcessController', () => {
   });
 
   describe('Reset', () => {
+    it('keeps one application id for a process and creates a new one after reset', () => {
+      const applicationId = controller.applicationId;
+
+      controller.updateCalculation({ loanAmount: 10000 });
+      expect(controller.applicationId).to.equal(applicationId);
+
+      controller.reset();
+
+      expect(controller.applicationId).to.not.equal(applicationId);
+    });
+
     it('resets process state back to initial', () => {
       controller.completeCalculation({
         loanAmount: 10000,

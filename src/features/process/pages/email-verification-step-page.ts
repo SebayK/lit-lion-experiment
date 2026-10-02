@@ -1,8 +1,22 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
 import type { ProcessController } from '../controllers/process-controller.js';
 import { processContext } from '../context.js';
+import {
+  AuthenticationModule,
+  type AuthenticationAdapter,
+} from '../../authentication/authentication-module.js';
+import { HttpAuthenticationAdapter } from '../../authentication/authentication-adapter.js';
+import '../../authentication/authentication-code-verification.js';
+
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
 
 @customElement('email-verification-step-page')
 export class EmailVerificationStepPage extends LitElement {
@@ -15,6 +29,17 @@ export class EmailVerificationStepPage extends LitElement {
 
   @state()
   private error: string = '';
+
+  /** Optional injection seam for the page's parent and component tests. */
+  @property({ attribute: false })
+  authenticationAdapter: AuthenticationAdapter = new HttpAuthenticationAdapter();
+
+  /** A parent may provide a longer-lived module instance. */
+  @property({ attribute: false })
+  authenticationModule?: AuthenticationModule;
+
+  @state()
+  private ownedAuthenticationModule?: AuthenticationModule;
 
   static styles = css`
     :host {
@@ -148,37 +173,53 @@ export class EmailVerificationStepPage extends LitElement {
     }
   `;
 
-  private _validateEmail(email: string): boolean {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+  private get activeAuthenticationModule(): AuthenticationModule | undefined {
+    return this.authenticationModule ?? this.ownedAuthenticationModule;
+  }
+
+  protected updated(): void {
+    if (
+      this.processCtrl &&
+      !this.authenticationModule &&
+      this.ownedAuthenticationModule?.applicationId !== this.processCtrl.applicationId
+    ) {
+      this.ownedAuthenticationModule = new AuthenticationModule({
+        applicationId: this.processCtrl.applicationId,
+        channel: 'email',
+        adapter: this.authenticationAdapter,
+      });
+    }
   }
 
   private _handleEmailChange(e: Event): void {
     const input = e.target as HTMLInputElement;
-    this.email = input.value;
+    const nextEmail = input.value;
+    const module = this.activeAuthenticationModule;
+    if (module?.contact && normalizeEmail(nextEmail) !== module.contact) {
+      module.clear();
+    }
+    this.email = nextEmail;
     this.error = '';
   }
 
-  private _handleVerify(): void {
+  private _handleStart(): void {
     if (!this.email) {
       this.error = 'Adres email jest wymagany';
       return;
     }
 
-    if (!this._validateEmail(this.email)) {
+    const normalizedEmail = normalizeEmail(this.email);
+    if (!isValidEmail(normalizedEmail)) {
       this.error = 'Podaj prawidłowy adres email';
       return;
     }
 
-    this.processCtrl?.completeEmailVerification(this.email);
-
-    this.dispatchEvent(
-      new CustomEvent("request-navigate", {
-        detail: "/process/phone-verification",
-        bubbles: true,
-        composed: true,
-      })
-    );
+    this.email = normalizedEmail;
+    this.error = '';
+    const module = this.activeAuthenticationModule;
+    if (module) {
+      void module.start(normalizedEmail).catch(() => undefined);
+    }
   }
 
   private _handleBack(): void {
@@ -201,8 +242,7 @@ export class EmailVerificationStepPage extends LitElement {
         </div>
       `;
     }
-    console.log('email', this.email)
-    console.log('processController', this.processCtrl)
+    const authenticationModule = this.activeAuthenticationModule;
     return html`
       <div class="verification-card">
         <h2>Weryfikacja adresu email</h2>
@@ -220,7 +260,7 @@ export class EmailVerificationStepPage extends LitElement {
             placeholder="twoj@email.pl"
             .value=${this.email}
             @input=${this._handleEmailChange}
-            @keypress=${(e: KeyboardEvent) => e.key === 'Enter' && this._handleVerify()}
+            @keypress=${(e: KeyboardEvent) => e.key === 'Enter' && this._handleStart()}
           />
           ${this.error ? html`<div class="error-message">${this.error}</div>` : ''}
         </div>
@@ -232,12 +272,14 @@ export class EmailVerificationStepPage extends LitElement {
           <button 
             type="button" 
             class="btn btn-primary" 
-            @click=${this._handleVerify}
-            ?disabled=${!this.email}
+            @click=${this._handleStart}
+            ?disabled=${!this.email || authenticationModule?.isSending}
           >
-            Zweryfikuj email &rarr;
+            Dalej &rarr;
           </button>
         </div>
+
+        <authentication-code-verification .module=${authenticationModule}></authentication-code-verification>
       </div>
     `;
   }

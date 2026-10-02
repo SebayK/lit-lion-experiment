@@ -5,6 +5,14 @@ export interface ProcessControllerOptions {
   onNavigate?: (step: ProcessStep) => void;
 }
 
+function createApplicationId(): string {
+  if ('randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `application-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 /**
  * ReactiveController managing the Application Process state, step transitions,
  * and navigation guards.
@@ -15,6 +23,7 @@ export class ProcessController implements ReactiveController {
   private readonly subscribers = new Set<ReactiveControllerHost>();
 
   // Domain state
+  applicationId = createApplicationId();
   calculationData: CalculationData | null = null;
   email: string | null = null;
   phone: string | null = null;
@@ -166,6 +175,7 @@ export class ProcessController implements ReactiveController {
    * Resets the entire process back to initial blank state.
    */
   reset(): void {
+    this.applicationId = createApplicationId();
     this.calculationData = null;
     this.email = null;
     this.phone = null;
