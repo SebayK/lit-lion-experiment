@@ -23,6 +23,12 @@ export interface EmailVerificationResult {
   verificationToken: string;
 }
 
+export interface PhoneVerificationResult {
+  applicationId: string;
+  phone: string;
+  verificationToken: string;
+}
+
 export interface ProcessState {
   calculationData: CalculationData | null;
   stepStatuses: Record<ProcessStep, StepStatus>;

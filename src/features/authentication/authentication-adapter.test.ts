@@ -9,9 +9,9 @@ const mockAdapter = new HttpAuthenticationAdapter(async (input, init) => {
   return route.handler({ request, cookies: {}, params: {} });
 });
 
-async function confirmationError(applicationId: string, challengeId: string, code: string): Promise<string> {
+async function confirmationError(applicationId: string, challengeId: string, code: string, channel: 'email' | 'phone' = 'email'): Promise<string> {
   try {
-    await mockAdapter.confirmCode({ applicationId, challengeId, code });
+    await mockAdapter.confirmCode({ applicationId, channel, challengeId, code });
     return '';
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
@@ -31,11 +31,18 @@ describe('HttpAuthenticationAdapter', () => {
     expect(await confirmationError('application-a', 'unknown-challenge', '102030')).to.include('Niepoprawny kod');
     expect(await confirmationError('application-a', first.challengeId, '654321')).to.include('Niepoprawny kod');
     expect(await confirmationError('application-a', first.challengeId, '012345')).to.include('Niepoprawny kod');
-    const firstResult = await mockAdapter.confirmCode({ applicationId: 'application-a', challengeId: first.challengeId, code: '102030' });
-    const secondResult = await mockAdapter.confirmCode({ applicationId: 'application-b', challengeId: second.challengeId, code: '654321' });
+    const firstResult = await mockAdapter.confirmCode({ applicationId: 'application-a', channel: 'email', challengeId: first.challengeId, code: '102030' });
+    const secondResult = await mockAdapter.confirmCode({ applicationId: 'application-b', channel: 'email', challengeId: second.challengeId, code: '654321' });
     expect(firstResult.verificationToken).to.be.a('string').and.not.equal('102030');
     expect(firstResult.verificationToken).not.to.equal(secondResult.verificationToken);
     expect(await confirmationError('application-a', first.challengeId, '102030')).to.include('Niepoprawny kod');
+  });
+  it('does not allow a challenge from one channel to confirm through another channel', async () => {
+    configureMockAuthentication({ correctCode: '102030' });
+    const challenge = await mockAdapter.requestCode({ applicationId: 'application-a', channel: 'email', contact: 'jane@example.com' });
+    expect(await confirmationError('application-a', challenge.challengeId, '102030', 'phone')).to.include('Niepoprawny kod');
+    const result = await mockAdapter.confirmCode({ applicationId: 'application-a', channel: 'email', challengeId: challenge.challengeId, code: '102030' });
+    expect(result.verificationToken).to.be.a('string');
   });
   it('posts the application, challenge and code and returns an opaque token', async () => {
     let request: Request | undefined;
@@ -43,10 +50,10 @@ describe('HttpAuthenticationAdapter', () => {
       request = new Request(input, init);
       return Response.json({ verificationToken: 'opaque-token' });
     });
-    const result = await adapter.confirmCode({ applicationId: 'application-1', challengeId: 'challenge-1', code: '102030' });
+    const result = await adapter.confirmCode({ applicationId: 'application-1', channel: 'phone', challengeId: 'challenge-1', code: '102030' });
     expect(request?.method).to.equal('POST');
     expect(new URL(request!.url).pathname).to.equal('/api/authentication/code/confirm');
-    expect(await request?.json()).to.deep.equal({ applicationId: 'application-1', challengeId: 'challenge-1', code: '102030' });
+    expect(await request?.json()).to.deep.equal({ applicationId: 'application-1', channel: 'phone', challengeId: 'challenge-1', code: '102030' });
     expect(result).to.deep.equal({ verificationToken: 'opaque-token' });
   });
   it('posts the application, channel, and contact and returns challenge metadata', async () => {

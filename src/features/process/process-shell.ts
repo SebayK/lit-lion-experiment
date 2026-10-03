@@ -4,7 +4,7 @@ import { provide } from "@lit/context";
 import { Routes } from "@lit-labs/router";
 import { ProcessController } from "./controllers/process-controller.js";
 import { processContext } from "./context.js";
-import type { ProcessStep, EmailVerificationResult } from "./types.js";
+import type { ProcessStep, EmailVerificationResult, PhoneVerificationResult } from "./types.js";
 import "./components/process-live-summary.js";
 
 @customElement("process-shell")
@@ -365,6 +365,13 @@ export class ProcessShell extends LitElement {
     }
   }
 
+  private _handlePhoneVerificationSuccess(event: CustomEvent<PhoneVerificationResult>): void {
+    event.stopPropagation();
+    if (this.processCtrl.completePhoneVerification(event.detail)) {
+      this.goto('/process/dashboard');
+    }
+  }
+
   /**
    * Shows a notification to the user when they are redirected due to missing prerequisites.
    * The notification auto-dismisses after 3 seconds.
@@ -635,6 +642,7 @@ export class ProcessShell extends LitElement {
         <main
           @request-navigate=${(e: CustomEvent<string>) => this.goto(e.detail)}
           @email-verification-success=${this._handleEmailVerificationSuccess}
+          @phone-verification-success=${this._handlePhoneVerificationSuccess}
         >
           ${this.routes.outlet()}
         </main>

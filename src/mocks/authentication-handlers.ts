@@ -40,7 +40,7 @@ export const authenticationHandlers = [
   http.post('/api/authentication/code/confirm', async ({ request }) => {
     const body = (await request.json()) as Partial<ConfirmCode>;
     const active = typeof body.challengeId === 'string' ? challenges.get(body.challengeId) : undefined;
-    if (!active || body.applicationId !== active.request.applicationId ||
+    if (!active || body.applicationId !== active.request.applicationId || body.channel !== active.request.channel ||
         typeof body.code !== 'string' || !isValidCode(body.code) || body.code !== active.code) {
       return Response.json({ message: 'Niepoprawny kod. Spróbuj ponownie.' }, { status: 400 });
     }

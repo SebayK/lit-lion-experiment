@@ -105,7 +105,7 @@ describe('AuthenticationModule', () => {
       adapter: {
         requestCode: async () => challenge,
         confirmCode: async request => {
-          expect(request).to.deep.equal({ applicationId: 'application-1', challengeId: 'challenge-1', code: '102030' });
+          expect(request).to.deep.equal({ applicationId: 'application-1', channel: 'email', challengeId: 'challenge-1', code: '102030' });
           return { verificationToken: 'opaque-token' };
         },
       },

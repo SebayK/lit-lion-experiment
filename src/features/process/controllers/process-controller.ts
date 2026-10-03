@@ -1,5 +1,5 @@
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
-import type { CalculationData, ProcessStep, StepStatus, EmailVerificationResult } from '../types.js';
+import type { CalculationData, ProcessStep, StepStatus, EmailVerificationResult, PhoneVerificationResult } from '../types.js';
 
 export interface ProcessControllerOptions {
   onNavigate?: (step: ProcessStep) => void;
@@ -29,6 +29,7 @@ export class ProcessController implements ReactiveController {
   email: string | null = null;
   emailVerificationToken: string | null = null;
   phone: string | null = null;
+  phoneVerificationToken: string | null = null;
 
   // Step progression statuses
   stepStatuses: Record<ProcessStep, StepStatus> = {
@@ -178,10 +179,14 @@ export class ProcessController implements ReactiveController {
   /**
    * Completes phone verification.
    */
-  completePhoneVerification(phone: string): void {
-    this.phone = phone;
+  completePhoneVerification(result: PhoneVerificationResult): boolean {
+    if (result.applicationId !== this.applicationId || !result.phone || !result.verificationToken.trim() ||
+        !this.canAccess('phone-verification') || this.stepStatuses['phone-verification'] === 'completed') return false;
+    this.phone = result.phone;
+    this.phoneVerificationToken = result.verificationToken;
     this.stepStatuses['phone-verification'] = 'completed';
     this._notify();
+    return true;
   }
 
   /**
@@ -193,6 +198,7 @@ export class ProcessController implements ReactiveController {
     this.email = null;
     this.emailVerificationToken = null;
     this.phone = null;
+    this.phoneVerificationToken = null;
     this.stepStatuses = {
       calculation: 'pending',
       'client-profile': 'pending',

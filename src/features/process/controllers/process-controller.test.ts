@@ -125,9 +125,10 @@ describe('ProcessController', () => {
       controller.completeClientProfile();
       controller.completeIncome();
       controller.completeEmailVerification({ applicationId: controller.applicationId, email: 'jan.kowalski@example.com', verificationToken: 'email-token' });
-      controller.completePhoneVerification('+48123456789');
+      expect(controller.completePhoneVerification({ applicationId: controller.applicationId, phone: '+48123456789', verificationToken: 'phone-token' })).to.be.true;
 
       expect(controller.canAccess('dashboard')).to.be.true;
+      expect(controller.phoneVerificationToken).to.equal('phone-token');
     });
   });
 
@@ -152,16 +153,34 @@ describe('ProcessController', () => {
       controller.completeClientProfile();
       controller.completeIncome();
       controller.completeEmailVerification({ applicationId: controller.applicationId, email: 'a@b.pl', verificationToken: 'email-token' });
-      controller.completePhoneVerification('123456789');
+      controller.completePhoneVerification({ applicationId: controller.applicationId, phone: '123456789', verificationToken: 'phone-token' });
 
       controller.reset();
 
       expect(controller.calculationData).to.be.null;
       expect(controller.email).to.be.null;
       expect(controller.phone).to.be.null;
+      expect(controller.phoneVerificationToken).to.be.null;
       expect(controller.canAccess('calculation')).to.be.true;
       expect(controller.canAccess('client-profile')).to.be.false;
       expect(controller.canAccess('income')).to.be.false;
     });
+  });
+
+  it('accepts a phone token only after email verification and only for the active application', () => {
+    controller.completeCalculation({ loanAmount: 1, periodMonths: 1, monthlyInstallment: 1 });
+    controller.completeClientProfile();
+    controller.completeIncome();
+    const result = { applicationId: controller.applicationId, phone: '+48123456789', verificationToken: 'phone-token' };
+    expect(controller.completePhoneVerification(result)).to.be.false;
+    controller.completeEmailVerification({ applicationId: controller.applicationId, email: 'a@b.pl', verificationToken: 'email-token' });
+    expect(controller.completePhoneVerification({ ...result, applicationId: 'other-application' })).to.be.false;
+    expect(controller.completePhoneVerification({ ...result, verificationToken: '' })).to.be.false;
+    expect(controller.completePhoneVerification(result)).to.be.true;
+    expect(controller.phoneVerificationToken).to.equal('phone-token');
+    expect(controller.canAccess('dashboard')).to.be.true;
+    expect(controller.completePhoneVerification(result)).to.be.false;
+    controller.reset();
+    expect(controller.phoneVerificationToken).to.be.null;
   });
 });

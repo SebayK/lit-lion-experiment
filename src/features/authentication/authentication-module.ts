@@ -21,6 +21,7 @@ export interface AuthenticationAdapter {
 
 export interface ConfirmCode {
   applicationId: string;
+  channel: AuthenticationChannel;
   challengeId: string;
   code: string;
 }
@@ -151,6 +152,7 @@ export class AuthenticationModule {
     this.notify();
     const confirmation = Promise.resolve().then(() => this.adapter.confirmCode({
         applicationId: this.applicationId,
+        channel: this.channel,
         challengeId,
         code,
       }))
