@@ -81,4 +81,36 @@ describe('HttpAuthenticationAdapter', () => {
     expect(challenge.expiresAt).to.equal('2026-10-02T12:05:00.000Z');
     expect(challenge.resendAvailableAt).to.equal('2026-10-02T12:01:00.000Z');
   });
+
+  it('requests a code through the browser fetch when using the default adapter', async () => {
+    const originalFetch = window.fetch;
+    window.fetch = function (this: Window): Promise<Response> {
+      if (this !== window) {
+        throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+      }
+
+      return Promise.resolve(Response.json({
+        challengeId: 'challenge-1',
+        expiresAt: '2026-10-02T12:05:00.000Z',
+        resendAvailableAt: '2026-10-02T12:01:00.000Z',
+      }));
+    } as typeof window.fetch;
+
+    try {
+      const adapter = new HttpAuthenticationAdapter();
+      const challenge = await adapter.requestCode({
+        applicationId: 'application-1',
+        channel: 'email',
+        contact: 'jane@example.com',
+      });
+
+      expect(challenge).to.deep.equal({
+        challengeId: 'challenge-1',
+        expiresAt: '2026-10-02T12:05:00.000Z',
+        resendAvailableAt: '2026-10-02T12:01:00.000Z',
+      });
+    } finally {
+      window.fetch = originalFetch;
+    }
+  });
 });

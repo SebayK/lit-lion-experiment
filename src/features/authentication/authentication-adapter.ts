@@ -14,7 +14,7 @@ export type FetchAuthenticationRequest = (input: RequestInfo | URL, init?: Reque
 export class HttpAuthenticationAdapter implements AuthenticationAdapter {
   private readonly fetchRequest: FetchAuthenticationRequest;
 
-  constructor(fetchRequest: FetchAuthenticationRequest = fetch) {
+  constructor(fetchRequest: FetchAuthenticationRequest = fetch.bind(globalThis)) {
     this.fetchRequest = fetchRequest;
   }
 
