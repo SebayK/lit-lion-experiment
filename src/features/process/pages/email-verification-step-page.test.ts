@@ -39,8 +39,9 @@ describe('EmailVerificationStepPage', () => {
       return new AuthenticationModule({
         applicationId: controller.applicationId, channel: 'email',
         adapter: {
-          requestCode: async () => ({ challengeId: controller.applicationId, expiresAt: '2026-10-02T12:05:00Z', resendAvailableAt: '2026-10-02T12:01:00Z' }),
+          requestCode: async () => ({ challengeId: controller.applicationId, expiresAt: '2036-10-02T12:05:00Z', resendAvailableAt: '2036-10-02T12:01:00Z' }),
           confirmCode: async () => ({ verificationToken: 'token' }),
+          invalidateChallenge: async () => {},
         },
       });
     }
@@ -84,8 +85,9 @@ describe('EmailVerificationStepPage', () => {
     const module = new AuthenticationModule({
       applicationId: controller.applicationId, channel: 'email',
       adapter: {
-        requestCode: async () => ({ challengeId: 'detached-challenge', expiresAt: '2026-10-02T12:05:00Z', resendAvailableAt: '2026-10-02T12:01:00Z' }),
+        requestCode: async () => ({ challengeId: 'detached-challenge', expiresAt: '2036-10-02T12:05:00Z', resendAvailableAt: '2036-10-02T12:01:00Z' }),
         confirmCode: () => new Promise(resolve => { resolveConfirmation = resolve; }),
+        invalidateChallenge: async () => {},
       },
     });
     mount(controller, module);
@@ -128,9 +130,10 @@ describe('EmailVerificationStepPage', () => {
     page.authenticationAdapter = {
       requestCode: async request => {
         applicationIds.push(request.applicationId);
-        return { challengeId: 'challenge-1', expiresAt: '2026-10-02T12:05:00Z', resendAvailableAt: '2026-10-02T12:01:00Z' };
+        return { challengeId: 'challenge-1', expiresAt: '2036-10-02T12:05:00Z', resendAvailableAt: '2036-10-02T12:01:00Z' };
       },
       confirmCode: async () => ({ verificationToken: 'token' }),
+      invalidateChallenge: async () => {},
     };
     await page.updateComplete;
     const input = page.shadowRoot!.querySelector('input[type="email"]') as HTMLInputElement;
@@ -163,8 +166,9 @@ describe('EmailVerificationStepPage', () => {
     const module = new AuthenticationModule({
       applicationId: controller.applicationId, channel: 'email',
       adapter: {
-        requestCode: async () => ({ challengeId: 'challenge-1', expiresAt: '2026-10-02T12:05:00Z', resendAvailableAt: '2026-10-02T12:01:00Z' }),
+        requestCode: async () => ({ challengeId: 'challenge-1', expiresAt: '2036-10-02T12:05:00Z', resendAvailableAt: '2036-10-02T12:01:00Z' }),
         confirmCode: () => new Promise(resolve => { resolveConfirmation = resolve; }),
+        invalidateChallenge: async () => {},
       },
     });
     mount(controller, module);
@@ -190,12 +194,13 @@ describe('EmailVerificationStepPage', () => {
       adapter: {
         requestCode: async () => {
           requests++;
-          return { challengeId: 'external-challenge', expiresAt: '2026-10-02T12:05:00Z', resendAvailableAt: '2026-10-02T12:01:00Z' };
+          return { challengeId: 'external-challenge', expiresAt: '2036-10-02T12:05:00Z', resendAvailableAt: '2036-10-02T12:01:00Z' };
         },
         confirmCode: async ({ code }) => {
           if (code !== '102030') throw new Error('Niepoprawny kod. Spróbuj ponownie.');
           return { verificationToken: 'external-token' };
         },
+        invalidateChallenge: async () => {},
       },
     });
     mount(controller, module);
@@ -240,8 +245,9 @@ describe('EmailVerificationStepPage', () => {
     const module = new AuthenticationModule({
       applicationId: controller.applicationId, channel: 'email',
       adapter: {
-        requestCode: async () => ({ challengeId: 'challenge-1', expiresAt: '2026-10-02T12:05:00Z', resendAvailableAt: '2026-10-02T12:01:00Z' }),
+        requestCode: async () => ({ challengeId: 'challenge-1', expiresAt: '2036-10-02T12:05:00Z', resendAvailableAt: '2036-10-02T12:01:00Z' }),
         confirmCode: async () => ({ verificationToken: 'opaque-token' }),
+        invalidateChallenge: async () => {},
       },
     });
     mount(controller, module);
@@ -277,10 +283,11 @@ describe('EmailVerificationStepPage', () => {
           requests.push(request.contact);
           return {
             challengeId: 'challenge-1',
-            expiresAt: '2026-10-02T12:05:00.000Z',
-            resendAvailableAt: '2026-10-02T12:01:00.000Z',
+            expiresAt: '2036-10-02T12:05:00.000Z',
+            resendAvailableAt: '2036-10-02T12:01:00.000Z',
           };
         },
+        invalidateChallenge: async () => {},
       },
     });
     const processController = new ProcessController(new TestHost());
@@ -315,10 +322,11 @@ describe('EmailVerificationStepPage', () => {
           requestCount++;
           return {
             challengeId: 'challenge-1',
-            expiresAt: '2026-10-02T12:05:00.000Z',
-            resendAvailableAt: '2026-10-02T12:01:00.000Z',
+            expiresAt: '2036-10-02T12:05:00.000Z',
+            resendAvailableAt: '2036-10-02T12:01:00.000Z',
           };
         },
+        invalidateChallenge: async () => {},
       },
     });
     const processController = new ProcessController(new TestHost());

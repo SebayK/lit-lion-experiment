@@ -12,6 +12,7 @@ export class AuthenticationCodeVerification extends LitElement {
 
   private unsubscribe?: () => void;
   private renderedChallengeId?: string;
+  private countdownTimer?: ReturnType<typeof setInterval>;
 
   static styles = css`
     :host {
@@ -92,12 +93,18 @@ export class AuthenticationCodeVerification extends LitElement {
     this.unsubscribe?.();
     this.unsubscribe = this.module?.subscribe(() => this.requestUpdate());
     this.code = '';
+    this.countdownTimer = setInterval(() => {
+      this.module?.refresh();
+      this.requestUpdate();
+    }, 1000);
     this.requestUpdate();
   }
 
   disconnectedCallback(): void {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
+    if (this.countdownTimer) clearInterval(this.countdownTimer);
+    this.countdownTimer = undefined;
     super.disconnectedCallback();
   }
 
@@ -123,6 +130,16 @@ export class AuthenticationCodeVerification extends LitElement {
     );
   }
 
+  private async handleResend(): Promise<void> {
+    const module = this.module;
+    if (!module?.canResend) return;
+    try {
+      await module.resend();
+    } catch {
+      // The module exposes the transport error as visible state.
+    }
+  }
+
   render() {
     const module = this.module;
     if (!module || module.status === 'idle') {
@@ -133,7 +150,7 @@ export class AuthenticationCodeVerification extends LitElement {
       return html`<div role="status" aria-live="polite">Wysyłanie kodu…</div>`;
     }
 
-    if (module.status === 'send-error') {
+    if (module.status === 'send-error' && !module.challenge) {
       return html`<div role="alert">${module.error?.message ?? 'Nie udało się wysłać kodu.'}</div>`;
     }
 
@@ -148,6 +165,13 @@ export class AuthenticationCodeVerification extends LitElement {
     return html`
       <div class="challenge">
         <div>Kod został wysłany na <strong>${maskContact(module.channel, module.contact)}</strong>.</div>
+        ${module.status === 'expired' ? html`<p role="alert">Kod wygasł. Rozpocznij nowe wyzwanie.</p>` : ''}
+        ${module.status === 'locked' ? html`<p role="alert">Limit prób został wyczerpany. Rozpocznij nowe wyzwanie.</p>` : ''}
+        ${module.status === 'send-error' ? html`<p role="alert">${module.error?.message ?? 'Nie udało się wysłać nowego kodu.'}</p>` : ''}
+        ${module.challenge && module.status !== 'expired' && module.status !== 'locked'
+          ? html`<p role="status">${module.expiresInSeconds === 0
+            ? 'Czas ważności minął. Potwierdź kod, aby sprawdzić jego status.'
+            : `Kod wygaśnie za ${module.expiresInSeconds} s.`}</p>` : ''}
         <form class="form-group" @submit=${this.handleConfirm}>
           <label for="code">Kod weryfikacyjny</label>
           <input
@@ -165,12 +189,18 @@ export class AuthenticationCodeVerification extends LitElement {
             @input=${this.handleCodeInput}
           />
           <div id="code-help">Wpisz sześć cyfr. Pierwsza cyfra nie może być zerem.</div>
-          <div id="code-error" role="alert">${module.error?.message ?? ''}</div>
+          <div id="code-error" role="alert">${['invalid-code', 'confirm-error'].includes(module.status) ? module.error?.message ?? '' : ''}</div>
           ${module.status === 'verifying' ? html`<div role="status">Weryfikacja kodu…</div>` : ''}
           <button type="submit" ?disabled=${!isValidCode(this.code) || !module.canConfirm}>
             ${module.status === 'verifying' ? 'Weryfikacja…' : 'Potwierdź'}
           </button>
         </form>
+        ${['awaiting-code', 'invalid-code', 'confirm-error', 'send-error', 'expired', 'locked'].includes(module.status) ? html`
+          <p role="status">${module.canResend ? 'Możesz wysłać nowy kod.' : `Ponowna wysyłka dostępna za ${module.resendSecondsRemaining} s.`}</p>
+          <button type="button" ?disabled=${!module.canResend} @click=${this.handleResend}>
+            ${module.status === 'expired' || module.status === 'locked' ? 'Rozpocznij nowe wyzwanie' : 'Wyślij kod ponownie'}
+          </button>
+        ` : ''}
       </div>
     `;
   }

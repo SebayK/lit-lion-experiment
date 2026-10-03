@@ -1,6 +1,7 @@
 import { expect } from '@esm-bundle/chai';
 import { HttpAuthenticationAdapter } from './authentication-adapter.js';
-import { authenticationHandlers, configureMockAuthentication } from '../../mocks/authentication-handlers.js';
+import { AuthenticationError } from './authentication-module.js';
+import { authenticationHandlers, configureMockAuthentication, resetMockAuthentication } from '../../mocks/authentication-handlers.js';
 
 const mockAdapter = new HttpAuthenticationAdapter(async (input, init) => {
   const request = new Request(input, init);
@@ -19,7 +20,8 @@ async function confirmationError(applicationId: string, challengeId: string, cod
 }
 
 describe('HttpAuthenticationAdapter', () => {
-  afterEach(() => configureMockAuthentication({ correctCode: '123456' }));
+  beforeEach(() => resetMockAuthentication());
+  afterEach(() => resetMockAuthentication());
 
   it('checks codes against their own application and challenge through the HTTP mock', async () => {
     configureMockAuthentication({ correctCode: '102030' });
@@ -43,6 +45,74 @@ describe('HttpAuthenticationAdapter', () => {
     expect(await confirmationError('application-a', challenge.challengeId, '102030', 'phone')).to.include('Niepoprawny kod');
     const result = await mockAdapter.confirmCode({ applicationId: 'application-a', channel: 'email', challengeId: challenge.challengeId, code: '102030' });
     expect(result.verificationToken).to.be.a('string');
+  });
+
+  it('enforces cooldown, five attempts, and previous-challenge invalidation for both channels', async () => {
+    let now = Date.parse('2036-10-02T12:00:00.000Z');
+    configureMockAuthentication({ correctCode: '102030', now: () => now });
+
+    for (const channel of ['email', 'phone'] as const) {
+      const applicationId = `application-${channel}`;
+      const contact = channel === 'email' ? 'jane@example.com' : '+48123456789';
+      const first = await mockAdapter.requestCode({ applicationId, channel, contact });
+      let cooldownError: unknown;
+      try {
+        await mockAdapter.requestCode({ applicationId, channel, contact });
+      } catch (error) {
+        cooldownError = error;
+      }
+      expect(cooldownError).to.be.instanceOf(AuthenticationError);
+      expect((cooldownError as AuthenticationError).reason).to.equal('cooldown');
+
+      for (let attempt = 0; attempt < 4; attempt++) {
+        expect(await confirmationError(applicationId, first.challengeId, '654321', channel)).to.include('Niepoprawny kod');
+      }
+      expect(await confirmationError(applicationId, first.challengeId, '654321', channel)).to.include('zablokowane');
+      expect(await confirmationError(applicationId, first.challengeId, '102030', channel)).to.include('zablokowane');
+
+      now += 60_000;
+      const second = await mockAdapter.requestCode({ applicationId, channel, contact });
+      expect(await confirmationError(applicationId, first.challengeId, '102030', channel)).to.include('Niepoprawny kod');
+      expect((await mockAdapter.confirmCode({ applicationId, channel, challengeId: second.challengeId, code: '102030' })).verificationToken).to.be.a('string');
+    }
+  });
+
+  it('rejects an expired challenge and returns distinct expiry and transport errors', async () => {
+    let now = Date.parse('2036-10-02T12:00:00.000Z');
+    configureMockAuthentication({ now: () => now, expireChallenges: true });
+    const expired = await mockAdapter.requestCode({ applicationId: 'expired-app', channel: 'email', contact: 'jane@example.com' });
+    let expiryError: unknown;
+    try {
+      await mockAdapter.confirmCode({ applicationId: 'expired-app', channel: 'email', challengeId: expired.challengeId, code: '123456' });
+    } catch (error) {
+      expiryError = error;
+    }
+    expect(expiryError).to.be.instanceOf(AuthenticationError);
+    expect((expiryError as AuthenticationError).reason).to.equal('expired');
+
+    now += 60_000;
+    configureMockAuthentication({ expireChallenges: false, failRequests: true });
+    let sendError: unknown;
+    try {
+      await mockAdapter.requestCode({ applicationId: 'expired-app', channel: 'email', contact: 'jane@example.com' });
+    } catch (error) {
+      sendError = error;
+    }
+    expect(sendError).to.be.instanceOf(AuthenticationError);
+    expect((sendError as AuthenticationError).reason).to.equal('transport');
+  });
+
+  it('keeps the old contact invalidated if the next contact request fails', async () => {
+    const first = await mockAdapter.requestCode({ applicationId: 'contact-change-app', channel: 'email', contact: 'old@example.com' });
+    await mockAdapter.invalidateChallenge({ applicationId: 'contact-change-app', channel: 'email', challengeId: first.challengeId });
+    configureMockAuthentication({ failRequests: true });
+    try {
+      await mockAdapter.requestCode({ applicationId: 'contact-change-app', channel: 'email', contact: 'new@example.com' });
+    } catch {
+      // A failed request still invalidates the old contact challenge.
+    }
+
+    expect(await confirmationError('contact-change-app', first.challengeId, '123456')).to.include('Niepoprawny kod');
   });
   it('posts the application, challenge and code and returns an opaque token', async () => {
     let request: Request | undefined;

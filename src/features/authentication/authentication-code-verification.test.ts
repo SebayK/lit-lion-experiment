@@ -1,12 +1,12 @@
 import { expect } from '@esm-bundle/chai';
-import { AuthenticationModule, type CodeChallenge } from './authentication-module.js';
+import { AuthenticationError, AuthenticationModule, type CodeChallenge } from './authentication-module.js';
 import './authentication-code-verification.js';
 import { AuthenticationCodeVerification } from './authentication-code-verification.js';
 
 const challenge: CodeChallenge = {
   challengeId: 'challenge-1',
-  expiresAt: '2026-10-02T12:05:00.000Z',
-  resendAvailableAt: '2026-10-02T12:01:00.000Z',
+  expiresAt: '2036-10-02T12:05:00.000Z',
+  resendAvailableAt: '2036-10-02T12:01:00.000Z',
 };
 
 async function settle(element: AuthenticationCodeVerification): Promise<void> {
@@ -29,6 +29,7 @@ describe('AuthenticationCodeVerification', () => {
         confirmCode: ({ challengeId }) => challengeId === 'challenge-a'
           ? new Promise((_resolve, reject) => { rejectFirst = reject; })
           : Promise.resolve({ verificationToken: 'token-b' }),
+        invalidateChallenge: async () => {},
       },
     });
     element = document.createElement('authentication-code-verification') as AuthenticationCodeVerification;
@@ -69,6 +70,7 @@ describe('AuthenticationCodeVerification', () => {
       adapter: {
         requestCode: async () => challenge,
         confirmCode: async () => { confirmations++; return { verificationToken: 'token' }; },
+        invalidateChallenge: async () => {},
       },
     });
     element = document.createElement('authentication-code-verification') as AuthenticationCodeVerification;
@@ -104,6 +106,7 @@ describe('AuthenticationCodeVerification', () => {
           confirmations++;
           return new Promise(resolve => { resolveConfirmation = resolve; });
         },
+        invalidateChallenge: async () => {},
       },
     });
     element = document.createElement('authentication-code-verification') as AuthenticationCodeVerification;
@@ -125,7 +128,7 @@ describe('AuthenticationCodeVerification', () => {
     expect(successes).to.equal(0);
     expect(input.disabled).to.be.true;
     expect((element.shadowRoot!.querySelector('button') as HTMLButtonElement).disabled).to.be.true;
-    expect(element.shadowRoot!.querySelector('[role="status"]')?.textContent).to.include('Weryfikacja');
+    expect(form.querySelector('[role="status"]')?.textContent).to.include('Weryfikacja');
     resolveConfirmation({ verificationToken: 'token' });
     await settle(element);
     expect(successes).to.equal(1);
@@ -137,6 +140,7 @@ describe('AuthenticationCodeVerification', () => {
       adapter: {
         requestCode: async () => challenge,
         confirmCode: async () => { throw new Error('Niepoprawny kod. Spróbuj ponownie.'); },
+        invalidateChallenge: async () => {},
       },
     });
     element = document.createElement('authentication-code-verification') as AuthenticationCodeVerification;
@@ -155,7 +159,11 @@ describe('AuthenticationCodeVerification', () => {
   it('waits for explicit keyboard submission and emits an opaque success result', async () => {
     const module = new AuthenticationModule({
       applicationId: 'application-1', channel: 'email',
-      adapter: { requestCode: async () => challenge, confirmCode: async () => ({ verificationToken: 'opaque-token' }) },
+      adapter: {
+        requestCode: async () => challenge,
+        confirmCode: async () => ({ verificationToken: 'opaque-token' }),
+        invalidateChallenge: async () => {},
+      },
     });
     element = document.createElement('authentication-code-verification') as AuthenticationCodeVerification;
     element.module = module;
@@ -187,6 +195,7 @@ describe('AuthenticationCodeVerification', () => {
           requestCount++;
           return challenge;
         },
+        invalidateChallenge: async () => {},
       },
     });
     element = document.createElement('authentication-code-verification') as AuthenticationCodeVerification;
@@ -202,7 +211,11 @@ describe('AuthenticationCodeVerification', () => {
     const module = new AuthenticationModule({
       applicationId: 'application-1',
       channel: 'email',
-      adapter: { requestCode: async () => challenge, confirmCode: async () => ({ verificationToken: 'token' }) },
+      adapter: {
+        requestCode: async () => challenge,
+        confirmCode: async () => ({ verificationToken: 'token' }),
+        invalidateChallenge: async () => {},
+      },
     });
     element = document.createElement('authentication-code-verification') as AuthenticationCodeVerification;
     element.module = module;
@@ -214,5 +227,73 @@ describe('AuthenticationCodeVerification', () => {
     expect(element.shadowRoot?.textContent).to.include('ja**@example.com');
     expect(element.shadowRoot?.querySelector('input#code')).to.exist;
     expect(element.shadowRoot?.textContent).to.include('Potwierdź');
+  });
+
+  it('shows the resend cooldown and enables a new challenge when sixty seconds pass', async () => {
+    let now = Date.parse('2036-10-02T12:00:00.000Z');
+    let requests = 0;
+    const module = new AuthenticationModule({
+      applicationId: 'application-1',
+      channel: 'email',
+      now: () => now,
+      adapter: {
+        requestCode: async () => {
+          requests++;
+          return {
+            challengeId: `challenge-${requests}`,
+            expiresAt: new Date(now + 5 * 60_000).toISOString(),
+            resendAvailableAt: new Date(now + 60_000).toISOString(),
+          };
+        },
+        confirmCode: async () => {
+          if (now >= Date.parse('2036-10-02T12:00:00.000Z') + 60_000 + 5 * 60_000) {
+            throw new AuthenticationError('expired', 'Kod wygasł. Rozpocznij nowe wyzwanie.');
+          }
+          return { verificationToken: 'token' };
+        },
+        invalidateChallenge: async () => {},
+      },
+    });
+    element = document.createElement('authentication-code-verification') as AuthenticationCodeVerification;
+    element.module = module;
+    document.body.appendChild(element);
+
+    await module.start('jane@example.com');
+    await settle(element);
+    const resendButton = element.shadowRoot!.querySelector('button[type="button"]') as HTMLButtonElement;
+    expect(resendButton.disabled).to.be.true;
+    expect(element.shadowRoot!.textContent).to.include('60 s');
+
+    now += 60_000;
+    module.refresh();
+    await settle(element);
+    expect((element.shadowRoot!.querySelector('button[type="button"]') as HTMLButtonElement).disabled).to.be.false;
+    (element.shadowRoot!.querySelector('button[type="button"]') as HTMLButtonElement).click();
+    await settle(element);
+
+    expect(requests).to.equal(2);
+    expect(module.challenge?.challengeId).to.equal('challenge-2');
+    expect(element.shadowRoot!.textContent).to.include('60 s');
+
+    now += 5 * 60_000;
+    module.refresh();
+    await settle(element);
+    expect(module.status).to.equal('awaiting-code');
+    expect(element.shadowRoot!.textContent).to.include('Potwierdź kod, aby sprawdzić jego status.');
+    const codeInput = element.shadowRoot!.querySelector('input#code') as HTMLInputElement;
+    codeInput.value = '102030';
+    codeInput.dispatchEvent(new Event('input'));
+    await settle(element);
+    element.shadowRoot!.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(element);
+    expect(module.status).to.equal('expired');
+    expect(element.shadowRoot!.textContent).to.include('Kod wygasł');
+    const recoveryButton = element.shadowRoot!.querySelector('button[type="button"]') as HTMLButtonElement;
+    expect(recoveryButton.textContent).to.include('Rozpocznij nowe wyzwanie');
+    expect(recoveryButton.disabled).to.be.false;
+    recoveryButton.click();
+    await settle(element);
+    expect(requests).to.equal(3);
+    expect(module.challenge?.challengeId).to.equal('challenge-3');
   });
 });

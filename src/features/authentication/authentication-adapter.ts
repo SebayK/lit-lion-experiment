@@ -3,13 +3,30 @@ import type {
   CodeChallenge,
   RequestCode,
   ConfirmCode,
+  InvalidateChallenge,
   VerificationResult,
 } from './authentication-module.js';
+import { AuthenticationError, type AuthenticationErrorReason } from './authentication-module.js';
 
 export const REQUEST_CODE_ENDPOINT = '/api/authentication/code/request';
 export const CONFIRM_CODE_ENDPOINT = '/api/authentication/code/confirm';
+export const INVALIDATE_CHALLENGE_ENDPOINT = '/api/authentication/code/invalidate';
 
 export type FetchAuthenticationRequest = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+async function responseError(response: Response, fallback: string): Promise<AuthenticationError> {
+  let body: { code?: string; message?: string } = {};
+  try {
+    body = await response.json() as typeof body;
+  } catch {
+    // Keep the status based fallback when the server has no JSON error body.
+  }
+  const reason: AuthenticationErrorReason = body.code === 'invalid_code' ? 'invalid-code'
+    : body.code === 'challenge_expired' ? 'expired'
+      : body.code === 'challenge_locked' ? 'locked'
+        : body.code === 'resend_cooldown' ? 'cooldown' : 'transport';
+  return new AuthenticationError(reason, body.message ?? fallback);
+}
 
 export class HttpAuthenticationAdapter implements AuthenticationAdapter {
   private readonly fetchRequest: FetchAuthenticationRequest;
@@ -26,11 +43,12 @@ export class HttpAuthenticationAdapter implements AuthenticationAdapter {
     });
 
     if (!response.ok) {
-      throw new Error('Nie udało się wysłać kodu.');
+      throw await responseError(response, 'Nie udało się wysłać kodu.');
     }
 
     const body = (await response.json()) as Partial<CodeChallenge>;
-    if (!body.challengeId || !body.expiresAt || !body.resendAvailableAt) {
+    if (!body.challengeId || !body.expiresAt || !body.resendAvailableAt ||
+        !Number.isFinite(Date.parse(body.expiresAt)) || !Number.isFinite(Date.parse(body.resendAvailableAt))) {
       throw new Error('Odpowiedź serwera nie zawiera danych wyzwania.');
     }
 
@@ -48,7 +66,7 @@ export class HttpAuthenticationAdapter implements AuthenticationAdapter {
       body: JSON.stringify(request),
     });
     if (!response.ok) {
-      throw new Error(response.status === 400
+      throw await responseError(response, response.status === 400
         ? 'Niepoprawny kod. Spróbuj ponownie.'
         : 'Nie udało się potwierdzić kodu. Spróbuj ponownie.');
     }
@@ -57,5 +75,14 @@ export class HttpAuthenticationAdapter implements AuthenticationAdapter {
       throw new Error('Odpowiedź serwera nie zawiera wyniku weryfikacji.');
     }
     return { verificationToken: body.verificationToken };
+  }
+
+  async invalidateChallenge(request: InvalidateChallenge): Promise<void> {
+    const response = await this.fetchRequest(INVALIDATE_CHALLENGE_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw await responseError(response, 'Nie udało się unieważnić wyzwania.');
   }
 }

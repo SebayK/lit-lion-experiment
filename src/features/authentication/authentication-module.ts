@@ -1,6 +1,15 @@
 export type AuthenticationChannel = 'email' | 'phone';
 
-export type AuthenticationStatus = 'idle' | 'sending' | 'awaiting-code' | 'send-error' | 'verifying' | 'invalid-code' | 'success';
+export type AuthenticationStatus = 'idle' | 'sending' | 'awaiting-code' | 'send-error' | 'verifying' | 'invalid-code' | 'confirm-error' | 'expired' | 'locked' | 'success';
+
+export type AuthenticationErrorReason = 'invalid-code' | 'expired' | 'locked' | 'cooldown' | 'transport';
+
+export class AuthenticationError extends Error {
+  constructor(readonly reason: AuthenticationErrorReason, message: string) {
+    super(message);
+    this.name = 'AuthenticationError';
+  }
+}
 
 export interface CodeChallenge {
   challengeId: string;
@@ -17,6 +26,7 @@ export interface RequestCode {
 export interface AuthenticationAdapter {
   requestCode(request: RequestCode): Promise<CodeChallenge>;
   confirmCode(request: ConfirmCode): Promise<VerificationResult>;
+  invalidateChallenge(request: InvalidateChallenge): Promise<void>;
 }
 
 export interface ConfirmCode {
@@ -24,6 +34,12 @@ export interface ConfirmCode {
   channel: AuthenticationChannel;
   challengeId: string;
   code: string;
+}
+
+export interface InvalidateChallenge {
+  applicationId: string;
+  channel: AuthenticationChannel;
+  challengeId: string;
 }
 
 export interface VerificationResult {
@@ -62,7 +78,10 @@ export class AuthenticationModule {
   private readonly subscribers = new Set<AuthenticationSubscriber>();
   private requestInFlight?: Promise<void>;
   private confirmationInFlight?: Promise<void>;
+  private challengeInvalidationInFlight?: Promise<void>;
   private requestVersion = 0;
+  private lastNow?: number;
+  private canConfirmAfterSendError = false;
 
   status: AuthenticationStatus = 'idle';
   contact: string | null = null;
@@ -84,6 +103,7 @@ export class AuthenticationModule {
 
   /** Starts a challenge for an already validated and normalized contact. */
   start(contact: string): Promise<void> {
+    if (this.contact && this.contact !== contact) this.clear();
     if (this.status === 'sending' && this.requestInFlight) {
       return this.requestInFlight;
     }
@@ -93,12 +113,25 @@ export class AuthenticationModule {
     }
 
     this.contact = contact;
-    this.challenge = null;
     this.error = null;
     this.result = null;
     this.confirmationInFlight = undefined;
     this.status = 'sending';
     this.notify();
+    const pendingInvalidation = this.challengeInvalidationInFlight;
+    if (pendingInvalidation) {
+      const requestVersion = this.requestVersion;
+      const request = pendingInvalidation.then(() => {
+        if (requestVersion !== this.requestVersion) return;
+        return this.requestChallenge(contact);
+      });
+      this.requestInFlight = request;
+      return request;
+    }
+    return this.requestChallenge(contact);
+  }
+
+  private requestChallenge(contact: string): Promise<void> {
     const requestVersion = ++this.requestVersion;
 
     const request = this.adapter
@@ -107,19 +140,27 @@ export class AuthenticationModule {
         channel: this.channel,
         contact,
       })
-      .then(challenge => {
-        if (requestVersion !== this.requestVersion) return;
+      .then(async challenge => {
+        if (requestVersion !== this.requestVersion) {
+          await this.adapter.invalidateChallenge({
+            applicationId: this.applicationId,
+            channel: this.channel,
+            challengeId: challenge.challengeId,
+          }).catch(() => undefined);
+          return;
+        }
         this.challenge = challenge;
         this.status = 'awaiting-code';
+        this.canConfirmAfterSendError = false;
         this.error = null;
         this.requestInFlight = undefined;
         this.notify();
       })
       .catch(error => {
         if (requestVersion !== this.requestVersion) return;
-        this.status = 'send-error';
-        this.error = error instanceof Error ? error : new Error('Nie udało się wysłać kodu.');
+        this.error = error instanceof Error ? error : new AuthenticationError('transport', 'Nie udało się wysłać kodu.');
         this.requestInFlight = undefined;
+        this.status = 'send-error';
         this.notify();
         throw this.error;
       });
@@ -133,10 +174,15 @@ export class AuthenticationModule {
   }
 
   get canConfirm(): boolean {
-    return this.challenge !== null && ['awaiting-code', 'invalid-code'].includes(this.status);
+    this.refresh();
+    return this.challenge !== null && (
+      ['awaiting-code', 'invalid-code', 'confirm-error'].includes(this.status) ||
+      (this.status === 'send-error' && this.canConfirmAfterSendError)
+    );
   }
 
   confirm(code: string): Promise<void> {
+    this.refresh();
     if (this.status === 'verifying' && this.confirmationInFlight) return this.confirmationInFlight;
     if (!this.canConfirm) return Promise.resolve();
     if (!isValidCode(code)) {
@@ -163,8 +209,11 @@ export class AuthenticationModule {
       })
       .catch(error => {
         if (requestVersion !== this.requestVersion) return;
-        this.error = error instanceof Error ? error : new Error('Nie udało się potwierdzić kodu.');
-        this.status = 'invalid-code';
+        const authError = error instanceof AuthenticationError ? error : new AuthenticationError('transport', error instanceof Error ? error.message : 'Nie udało się potwierdzić kodu.');
+        this.error = authError;
+        this.status = authError.reason === 'expired' ? 'expired'
+          : authError.reason === 'locked' ? 'locked'
+            : authError.reason === 'invalid-code' ? 'invalid-code' : 'confirm-error';
       })
       .then(() => {
         if (requestVersion !== this.requestVersion) return;
@@ -176,14 +225,49 @@ export class AuthenticationModule {
   }
 
   get canResend(): boolean {
-    if (!this.challenge || this.status !== 'awaiting-code') {
+    this.refresh();
+    if (!this.challenge || !['awaiting-code', 'invalid-code', 'confirm-error', 'expired', 'locked', 'send-error'].includes(this.status)) {
       return false;
     }
 
+    if (this.status === 'send-error' &&
+        (!(this.error instanceof AuthenticationError) || this.error.reason === 'transport')) return true;
     return this.now() >= Date.parse(this.challenge.resendAvailableAt);
   }
 
+  get resendSecondsRemaining(): number {
+    if (!this.challenge) return 0;
+    return Math.max(0, Math.ceil((Date.parse(this.challenge.resendAvailableAt) - this.now()) / 1000));
+  }
+
+  get expiresInSeconds(): number {
+    if (!this.challenge) return 0;
+    return Math.max(0, Math.ceil((Date.parse(this.challenge.expiresAt) - this.now()) / 1000));
+  }
+
+  /** Refreshes time-derived challenge state; UI timers call this to update countdowns. */
+  refresh(): void {
+    if (!this.challenge || !['awaiting-code', 'invalid-code', 'confirm-error', 'send-error'].includes(this.status)) return;
+    const now = this.now();
+    if (now === this.lastNow) return;
+    this.lastNow = now;
+    this.notify();
+  }
+
+  resend(): Promise<void> {
+    this.refresh();
+    if (!this.canResend || !this.contact) return Promise.resolve();
+    this.canConfirmAfterSendError = ['awaiting-code', 'invalid-code', 'confirm-error'].includes(this.status);
+    this.error = null;
+    this.result = null;
+    this.status = 'sending';
+    this.notify();
+    return this.requestChallenge(this.contact);
+  }
+
   clear(): void {
+    const challengeToInvalidate = this.challenge && this.status !== 'success' ? this.challenge.challengeId : null;
+    const requestToInvalidate = this.requestInFlight;
     this.requestVersion++;
     this.status = 'idle';
     this.contact = null;
@@ -192,7 +276,23 @@ export class AuthenticationModule {
     this.result = null;
     this.confirmationInFlight = undefined;
     this.requestInFlight = undefined;
+    this.lastNow = undefined;
+    this.canConfirmAfterSendError = false;
     this.notify();
+    const pending: Promise<unknown>[] = [];
+    if (challengeToInvalidate) {
+      pending.push(Promise.resolve().then(() => this.adapter.invalidateChallenge({
+        applicationId: this.applicationId,
+        channel: this.channel,
+        challengeId: challengeToInvalidate,
+      })).catch(() => undefined));
+    }
+    if (requestToInvalidate) pending.push(requestToInvalidate.catch(() => undefined));
+    const invalidation = Promise.all(pending).then(() => undefined);
+    this.challengeInvalidationInFlight = invalidation;
+    void invalidation.then(() => {
+      if (this.challengeInvalidationInFlight === invalidation) this.challengeInvalidationInFlight = undefined;
+    });
   }
 
   private notify(): void {

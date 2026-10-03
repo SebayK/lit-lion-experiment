@@ -47,11 +47,12 @@ describe('Phone authentication in Process Shell', () => {
       applicationId: controller.applicationId,
       channel: 'email',
       adapter: {
-        requestCode: async () => ({ challengeId: 'email-challenge', expiresAt: '2026-10-03T12:05:00Z', resendAvailableAt: '2026-10-03T12:01:00Z' }),
+        requestCode: async () => ({ challengeId: 'email-challenge', expiresAt: '2036-10-03T12:05:00Z', resendAvailableAt: '2036-10-03T12:01:00Z' }),
         confirmCode: async ({ code }) => {
           if (code !== '102030') throw new Error('Niepoprawny kod. Spróbuj ponownie.');
           return { verificationToken: 'email-opaque-token' };
         },
+        invalidateChallenge: async () => {},
       },
     });
     await settle(emailPage);
@@ -84,7 +85,7 @@ describe('Phone authentication in Process Shell', () => {
       adapter: {
         requestCode: async data => {
           request = data;
-          return { challengeId: 'phone-challenge', expiresAt: '2026-10-03T12:05:00Z', resendAvailableAt: '2026-10-03T12:01:00Z' };
+          return { challengeId: 'phone-challenge', expiresAt: '2036-10-03T12:05:00Z', resendAvailableAt: '2036-10-03T12:01:00Z' };
         },
         confirmCode: async ({ applicationId, challengeId, code }) => {
           expect(applicationId).to.equal(controller.applicationId);
@@ -92,6 +93,7 @@ describe('Phone authentication in Process Shell', () => {
           if (code !== '102030') throw new Error('Niepoprawny kod. Spróbuj ponownie.');
           return { verificationToken: 'phone-opaque-token' };
         },
+        invalidateChallenge: async () => {},
       },
     });
     await settle(page);
@@ -142,6 +144,7 @@ describe('Phone authentication in Process Shell', () => {
     page.authenticationAdapter = {
       requestCode: async () => { requests++; return { challengeId: 'challenge', expiresAt: '', resendAvailableAt: '' }; },
       confirmCode: async () => ({ verificationToken: 'token' }),
+      invalidateChallenge: async () => {},
     };
     await settle(page);
     const input = page.shadowRoot!.querySelector('input[type="tel"]') as HTMLInputElement;
