@@ -12,7 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@lion/ui": "^0.19.1",
+    "@lion/ui": "file:../lion/packages/ui/lion-ui-0.21.1.tgz",
     "@lit-labs/router": "^0.1.4",
     "@lit/context": "^1.1.6",
     "@open-wc/scoped-elements": "^3.0.10",
