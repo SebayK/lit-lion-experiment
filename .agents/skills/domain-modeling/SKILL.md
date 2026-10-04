@@ -55,7 +55,7 @@ When domain relationships are being discussed, stress-test them with specific sc
 
 ### Cross-reference with code
 
-When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible. Which is right?"
+When the user states how something works, call the Skill tool with `"repomix-context"` before checking the code. It reuses `repomix-output.xml` when available and generates a focused snapshot when needed. If exact current contents matter, verify against the working tree. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible. Which is right?"
 
 ### Update CONTEXT.md inline
 

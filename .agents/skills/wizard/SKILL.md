@@ -17,6 +17,8 @@ A wizard is ephemeral by default: built for one run, saved to a scratch or `scri
 
 Work out every manual step the human must take and every value that gets captured along the way. Read the repo first, don't ask cold:
 
+If the procedure depends on code or configuration spread across multiple files, call the Skill tool with `"repomix-context"` before this inventory. It reuses `repomix-output.xml` when available and generates a focused snapshot when needed. Use the snapshot to understand the current state, then read the explicit setup files below directly because secrets and ignored files may not be present in the snapshot.
+
 - For setup: `.env`, `.env.example`, `.env.*`, `README`, `docker-compose*`, framework config, and `.github/workflows/*` (every `secrets.*` / `vars.*` reference is a value the wizard must produce).
 - For a migration or transition: the current state, the target state, and the irreversible actions between them.
 

@@ -28,6 +28,7 @@
     "@web/mocks": "^3.0.0",
     "@web/test-runner": "^1.0.0",
     "msw": "^2.15.0",
+    "repomix": "^1.18.1",
     "typescript": "^7.0.2"
   },
   "type": "module"
