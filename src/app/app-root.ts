@@ -1,6 +1,8 @@
-import { LitElement, html, css } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import { LitElement, html, css, nothing } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 import { Router } from '@lit-labs/router';
+import { AppAppearance } from './layout/app-appearance.js';
+import './layout/app-layout.js';
 
 import './pages/home-page.js';
 import './pages/about-page.js';
@@ -15,6 +17,9 @@ initMocks();
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
+  @property({ type: String, reflect: true })
+  appearance: AppAppearance = AppAppearance.Standard;
+
   private _router = new Router(this, [
     { path: '/', render: () => html`<home-page></home-page>` },
     { path: '/about', render: () => html`<about-page></about-page>` },
@@ -40,24 +45,8 @@ export class AppRoot extends LitElement {
   static styles = css`
     :host {
       display: block;
-      min-height: 100vh;
-      background-color: #f8fafc;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       color: #0f172a;
-    }
-
-    .navbar {
-      background: #ffffff;
-      border-bottom: 1px solid #e2e8f0;
-      padding: 0 2rem;
-      height: 64px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
-      position: sticky;
-      top: 0;
-      z-index: 50;
     }
 
     .brand {
@@ -66,26 +55,26 @@ export class AppRoot extends LitElement {
       gap: 0.75rem;
       font-weight: 700;
       font-size: 1.125rem;
-      color: #1e293b;
+      color: var(--app-topbar-foreground);
       text-decoration: none;
     }
 
     .brand-icon {
       width: 32px;
       height: 32px;
-      background: linear-gradient(135deg, #2563eb, #3b82f6);
+      background: var(--app-navigation-active);
       border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
       font-size: 1.1rem;
     }
 
     .nav-links {
       display: flex;
       align-items: center;
-      gap: 1.5rem;
+      flex-wrap: wrap;
+      gap: 0.375rem;
       list-style: none;
       margin: 0;
       padding: 0;
@@ -93,7 +82,8 @@ export class AppRoot extends LitElement {
 
     .nav-link {
       text-decoration: none;
-      color: #64748b;
+      display: inline-block;
+      color: var(--app-topbar-foreground);
       font-weight: 500;
       padding: 0.5rem 0.875rem;
       border-radius: 6px;
@@ -101,20 +91,29 @@ export class AppRoot extends LitElement {
     }
 
     .nav-link:hover {
-      color: #1e293b;
-      background: #f1f5f9;
+      background: var(--app-navigation-hover);
     }
 
     .nav-link.active {
-      color: #2563eb;
-      background: #eff6ff;
+      color: var(--app-topbar-accent);
+      background: var(--app-navigation-active);
       font-weight: 600;
     }
 
-    .content-container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 2rem;
+    .brand:focus-visible, .nav-link:focus-visible {
+      outline: 2px solid var(--app-topbar-accent);
+      outline-offset: 3px;
+    }
+
+    @media (max-width: 640px) {
+      .nav-links {
+        justify-content: space-between;
+      }
+
+      .nav-link {
+        font-size: 0.875rem;
+        padding: 0.5rem 0.625rem;
+      }
     }
   `;
 
@@ -126,30 +125,27 @@ export class AppRoot extends LitElement {
 
   render() {
     return html`
-      <header class="navbar">
-        <a href="/" class="brand">
+      <app-layout .appearance=${this.appearance}>
+        <a href="/" class="brand" slot="brand">
           <div class="brand-icon">🦁</div>
           <span>Lit Lion Experiment</span>
         </a>
 
-        <nav>
+        <nav slot="navigation" aria-label="Nawigacja główna">
           <ul class="nav-links">
             <li>
-              <a href="/" class="nav-link ${this.isRouteActive('/') ? 'active' : ''}">Strona Główna</a>
+              <a href="/" aria-current=${this.isRouteActive('/') ? 'page' : nothing} class="nav-link ${this.isRouteActive('/') ? 'active' : ''}">Strona Główna</a>
             </li>
             <li>
-              <a href="/about" class="nav-link ${this.isRouteActive('/about') ? 'active' : ''}">O nas</a>
+              <a href="/about" aria-current=${this.isRouteActive('/about') ? 'page' : nothing} class="nav-link ${this.isRouteActive('/about') ? 'active' : ''}">O nas</a>
             </li>
             <li>
-              <a href="/process" class="nav-link ${this.isRouteActive('/process') ? 'active' : ''}">Proces</a>
+              <a href="/process" aria-current=${this.isRouteActive('/process') ? 'page' : nothing} class="nav-link ${this.isRouteActive('/process') ? 'active' : ''}">Proces</a>
             </li>
           </ul>
         </nav>
-      </header>
-
-      <main class="content-container">
         ${this._router.outlet()}
-      </main>
+      </app-layout>
     `;
   }
 }

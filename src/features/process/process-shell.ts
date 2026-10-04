@@ -405,7 +405,7 @@ export class ProcessShell extends LitElement {
   static styles = css`
     :host {
       display: block;
-      padding: 1.5rem;
+      padding: var(--app-page-padding, 1.5rem);
       animation: fadeIn 0.3s ease-in-out;
     }
 
@@ -480,9 +480,10 @@ export class ProcessShell extends LitElement {
 
     .stepper {
       display: flex;
+      flex-wrap: wrap;
       justify-content: center;
       align-items: center;
-      gap: 1.5rem;
+      gap: 0.75rem;
       margin-bottom: 2.5rem;
       padding: 1.25rem;
       background: #ffffff;
@@ -555,6 +556,17 @@ export class ProcessShell extends LitElement {
       width: 40px;
       height: 2px;
       background: #e2e8f0;
+    }
+
+    @media (max-width: 640px) {
+      .stepper {
+        justify-content: flex-start;
+        padding: 1rem;
+      }
+
+      .step-divider {
+        display: none;
+      }
     }
   `;
 

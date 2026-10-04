@@ -6,7 +6,7 @@ export class HomePage extends LitElement {
   static styles = css`
     :host {
       display: block;
-      padding: 2rem;
+      padding: var(--app-page-padding, 2rem);
       animation: fadeIn 0.3s ease-in-out;
     }
 
@@ -18,7 +18,7 @@ export class HomePage extends LitElement {
     .hero {
       background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
       color: #f8fafc;
-      padding: 3rem 2rem;
+      padding: clamp(1.25rem, 4vw, 3rem);
       border-radius: 16px;
       box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
       margin-bottom: 2rem;
@@ -26,7 +26,7 @@ export class HomePage extends LitElement {
 
     h1 {
       margin: 0 0 1rem 0;
-      font-size: 2.25rem;
+      font-size: clamp(1.5rem, 5vw, 2.25rem);
       font-weight: 700;
       background: linear-gradient(90deg, #38bdf8, #818cf8);
       -webkit-background-clip: text;
@@ -43,7 +43,7 @@ export class HomePage extends LitElement {
 
     .cards-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
       gap: 1.5rem;
     }
 
