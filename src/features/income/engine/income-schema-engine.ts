@@ -45,14 +45,17 @@ export class IncomeSchemaEngine {
     const sourceId = rawFormValue.source;
     const sourceConfig = config?.availableSources.find(s => s.sourceId === sourceId);
     const configFieldNames = sourceConfig?.fields?.map(f => f.name) || [];
+    const previous = existingIncome?.source === sourceId ? existingIncome : undefined;
 
     // Build income object with only relevant fields
     const income: Income = {
+      ...previous,
       id: existingIncome?.id || this.generateId(),
       amount: rawFormValue.amount || 0,
       source: rawFormValue.source,
       currency: rawFormValue.currency,
       durationDetails: {
+        ...previous?.durationDetails,
         type: rawFormValue.durationDetails?.type || '',
         endDate: endDateStr
       },
@@ -64,6 +67,8 @@ export class IncomeSchemaEngine {
       configFieldNames.forEach(fieldName => {
         if (rawFormValue[fieldName] !== undefined && rawFormValue[fieldName] !== '') {
           (income as any)[fieldName] = rawFormValue[fieldName];
+        } else if (rawFormValue[fieldName] === '') {
+          delete (income as any)[fieldName];
         }
       });
     }
@@ -93,7 +98,7 @@ export class IncomeSchemaEngine {
     // Add dynamic fields from config
     if (configFieldNames.length > 0) {
       configFieldNames.forEach(fieldName => {
-        formValue[fieldName] = (income as any)[fieldName] || '';
+        formValue[fieldName] = (income as any)[fieldName] ?? '';
       });
     }
 

@@ -9,7 +9,7 @@ Design **deep modules**: a lot of behaviour behind a small interface, placed at 
 
 ## Codebase context
 
-When applying this skill to a real module (not just reading it as vocabulary), call the Skill tool with `"repomix-context"` first. Ask the user which paths contain the module or seam under discussion, and whether to use `--compress`. Use the snapshot to read existing interfaces, understand collaborators, and apply the depth/seam analysis to actual code rather than an imagined shape.
+When applying this skill to a real module (not just reading it as vocabulary), call the Skill tool with `"repomix-context"` first. It reuses `repomix-output.xml` when available and generates the narrowest useful scope when needed. Use the snapshot to read existing interfaces, understand collaborators, and apply the depth/seam analysis to actual code rather than an imagined shape.
 
 ## Glossary
 

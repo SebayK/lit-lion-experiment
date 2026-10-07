@@ -6,7 +6,7 @@ export class NotFoundPage extends LitElement {
   static styles = css`
     :host {
       display: block;
-      padding: 4rem 2rem;
+      padding: var(--app-page-padding, 4rem 2rem);
       text-align: center;
     }
 
@@ -14,7 +14,7 @@ export class NotFoundPage extends LitElement {
       max-width: 500px;
       margin: 0 auto;
       background: #ffffff;
-      padding: 3rem;
+      padding: clamp(1.25rem, 4vw, 3rem);
       border-radius: 16px;
       border: 1px solid #e2e8f0;
       box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
