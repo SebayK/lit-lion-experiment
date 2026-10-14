@@ -1,46 +1,107 @@
 ---
 name: implement
-description: "Implement a piece of work based on a spec or set of tickets."
+description: "Implement a piece of work based on a spec or set of tickets. Hardened for isolated agents: blocks silent requirement dropping via Skeleton-First TDD and a mandatory Self-Audit Gate before any commit."
 allowed-tools: shell
 disable-model-invocation: true
 ---
 
-Implement the work described by the user in the spec, tickets, or active prompt.
+Implement the work described in the ticket file passed by the user.
 
-## 1. Codebase Context (Mandatory)
+## 0. Context isolation (mandatory first step)
 
-Before writing any code, establish codebase context:
-- **In agents with a native Skill tool (Antigravity / Claude Code):** Invoke `repomix-context`.
-- **In GitHub Copilot Agent Mode (or environments without a Skill tool):**
-  1. Check if `repomix-output.xml` exists and is non-empty:
-     - **Bash:** `test -s repomix-output.xml || npx repomix`
-     - **PowerShell:** `if (!(Test-Path repomix-output.xml) -or (Get-Item repomix-output.xml).Length -eq 0) { npx repomix }`
-     - **CMD:** `if not exist repomix-output.xml (npx repomix) else for %I in (repomix-output.xml) do if %~zI equ 0 npx repomix`
-     - **Cross-platform (Node):** `node -e "const fs = require('fs'); if (!fs.existsSync('repomix-output.xml') || fs.statSync('repomix-output.xml').size === 0) { require('child_process').execSync('npx repomix', { stdio: 'inherit' }); }"`
-  2. **Do NOT dump the entire `repomix-output.xml` into the LLM context.**
-  3. Instead, query the file via terminal to locate relevant symbols, types, and paths:
-     - **Bash / POSIX:** `rg -n -i "<symbol-or-path>" repomix-output.xml`
-     - **PowerShell:** `Select-String -Pattern "<symbol-or-path>" -Path repomix-output.xml`
-     - **CMD:** `findstr /N /I "<symbol-or-path>" repomix-output.xml`
-  4. Inspect only the relevant source files identified from the snapshot.
+Read **only** the designated ticket file (`issue-NN.md`) and the files listed in its Blast Radius table. Do not load global ADR files, SPEC.md, or repomix-output.xml into context — they bloat the window and are already inlined in the ticket.
 
-## 2. Implementation & TDD Loop
+If the ticket file is missing or empty, stop and tell the user: the ticket must be created first with `/to-tickets`.
 
-Implement behaviour incrementally using a red-green-refactor cycle:
-1. **Red:** Write a failing test covering the new or changed behavior at a clean seam.
-2. **Verify Red:** Run the single test file to confirm it fails for the expected reason:
-   - **Bash / PowerShell / CMD:** `npm test -- <path-to-test>` (or the project's test runner command)
-3. **Green:** Write the minimal implementation code to pass the test.
-4. **Verify Green:** Re-run the test file to ensure it passes.
-5. **Refactor:** Clean up code, enforce domain vocabulary (`CONTEXT.md`), and maintain module depth while keeping tests green.
+**Ticket Sizing Gate:** Verify the ticket has 1–5 checkboxes. If it has >5, warn the user: *"Ticket exceeds 5 checkboxes; implementing first 5 to prevent attention degradation."*
 
-## 3. Verification
+## 1. Skeleton-First: surface all requirements before writing logic
 
-Throughout the task and before completion:
-- Run typechecking: `npm run typecheck` or `npx tsc --noEmit`
-- Run the relevant test suite: `npm test`
+Before modifying any source file:
 
-## 4. Review & Commit
+1. Read the ticket's **Requirements** section aloud in your response, listing every checkbox (strictly 1–5).
+2. Establish the failing test:
+   - **Variant A (Pre-authored test file provided):** If the ticket provides or points to a pre-authored test file (`.test.ts`), confirm it exists on disk. Run it immediately:
+     `npm test -- <path-to-test>`
+     Confirm it fails for the expected reason. **You are strictly forbidden from modifying, deleting, or loosening pre-authored test assertions.** Your sole job is to write production code to turn it green.
+   - **Variant B (Test assertions listed in ticket):** Create or update the test file using the exact `it('should...')` scenarios from the ticket's Verification section. Run it to confirm it is red.
+3. Only after red is confirmed may you proceed to write production code.
 
-1. Review the git diff against the working tree/spec to check for regressions, consistency, and standard compliance.
-2. Commit the changes to the current working branch with a clear, concise commit message.
+**Anti-shortcut:** No `// TODO`, placeholder returns, or unused abstractions. If a requirement cannot be implemented in this ticket, flag it explicitly — do not silently omit it.
+
+## 2. Codebase context (scoped)
+
+For each file listed in the ticket's Blast Radius:
+
+- **In agents with a native Skill tool (Antigravity / Claude Code):** Use the targeted file read — do not invoke `repomix-context` for the whole repo.
+- **In GitHub Copilot Agent Mode:** Query repomix-output.xml only for the specific symbols named in the ticket:
+  - Bash: `rg -n -i "<symbol>" repomix-output.xml`
+  - PowerShell: `Select-String -Pattern "<symbol>" -Path repomix-output.xml`
+
+Inspect only the files identified above.
+
+## 3. Implementation & TDD loop
+
+Implement behaviour incrementally, one requirement checkbox at a time, using red-green-refactor:
+
+### Loop rules
+
+1. **Red:** Confirm the failing test fails for the expected reason.
+2. **Green:** Write the minimal implementation code to pass the test.
+3. **Verify green:** Re-run the test to confirm it passes.
+4. **Refactor & standards check:** Enforce domain vocabulary (`CONTEXT.md`), maintain module depth, keep tests green.
+5. **Tick the checkbox** in your running response as each requirement is satisfied.
+
+### Anti-gaming guardrails (non-negotiable)
+
+- **No test-gaming:** Never hardcode return values or write artificial branches (`if (arg === 'fixture') return ...`) to pass assertions. The implementation must express genuine domain logic.
+- **No test modification:** When working from a ticket with pre-authored assertions, you are forbidden from modifying those assertions to make the test pass.
+- **Architectural seams:** Respect the Guardrails & DO NOTs section of the ticket verbatim.
+  - Domain logic belongs in `domain/` or controllers.
+  - UI components remain thin and declarative (Lit + ScopedElementsMixin + @lion/ui).
+  - State management follows the established pattern (Redux slice or ReactiveController).
+- **Domain vocabulary:** Type names, public methods, and domain entities must match CONTEXT.md and the Inlined Contracts in the ticket.
+
+## 4. Self-Audit Gate (mandatory before any commit)
+
+**Do not summarise or commit until all four steps below pass.**
+
+### Step 1 — Re-read the ticket
+
+Re-read the ticket file in full (`read_file issue-NN.md`). Compare every checkbox against your implementation.
+
+### Step 2 — Call-site grep
+
+For every function, type, or constant you created or renamed, run a grep across the whole repository:
+
+```
+rg -n "<symbol>" src/
+```
+
+Verify that every call-site listed in the ticket's Blast Radius table has been updated. If you find an uncovered call-site not in the table, update it now.
+
+### Step 3 — Compile and test
+
+```bash
+npx tsc --noEmit
+npm test
+```
+
+Both commands must exit with code 0 before proceeding.
+
+### Step 4 — Audit table
+
+Produce this table in your response. If any row shows MISSING, implement the gap in the same turn before committing.
+
+| # | Requirement (from ticket checkbox) | Status | File:Line |
+|---|-------------------------------------|--------|-----------|
+| 1 | <requirement text> | DONE / MISSING | src/...:42 |
+| 2 | ... | ... | ... |
+
+## 5. Review & commit
+
+Only after the audit table shows all rows as DONE:
+
+1. Review the git diff against the ticket spec for regressions and standard compliance.
+2. If working in an asymmetric workflow (architect in M365 Copilot, executor here), export the diff for the dual-axis review (Spec + Standards) before committing.
+3. Commit with a clear, concise message referencing the ticket number.
