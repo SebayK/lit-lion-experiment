@@ -11,7 +11,7 @@ When exploring the codebase, read `CONTEXT.md` (if it exists) to get a clear men
 
 ## Codebase context
 
-Before Phase 1, call the Skill tool with `"repomix-context"` to pack the relevant part of the codebase. Ask the user which paths or modules are closest to the bug, and whether to use `--compress`. Use the snapshot in Phase 3 to generate hypotheses and in Phase 4 to locate instrumentation points.
+Before Phase 1, call the Skill tool with `"repomix-context"` to load the relevant codebase context. It reuses `repomix-output.xml` when available and generates a focused snapshot when needed. Use the snapshot in Phase 3 to generate hypotheses and in Phase 4 to locate instrumentation points.
 
 ## Redact
 

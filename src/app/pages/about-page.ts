@@ -6,7 +6,7 @@ export class AboutPage extends LitElement {
   static styles = css`
     :host {
       display: block;
-      padding: 2rem;
+      padding: var(--app-page-padding, 2rem);
       animation: fadeIn 0.3s ease-in-out;
     }
 
@@ -19,7 +19,7 @@ export class AboutPage extends LitElement {
       background: #ffffff;
       border: 1px solid #e2e8f0;
       border-radius: 16px;
-      padding: 2.5rem;
+      padding: clamp(1.25rem, 4vw, 2.5rem);
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
       max-width: 800px;
     }
