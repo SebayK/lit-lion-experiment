@@ -1,7 +1,7 @@
 ---
 name: audit-issue
-description: Adversarial diff-vs-ticket auditor. Run on a clean chat after /implement to catch every requirement the coding agent silently dropped, find uncovered call-sites, and patch all gaps before Repomix snapshot.
-disable-model-invocation: true
+description: "Adversarial diff-vs-ticket auditor. Run on a clean chat after /implement to catch every requirement the coding agent silently dropped, find uncovered call-sites, and patch all gaps before Repomix snapshot. Use when asked to audit an issue, verify ticket diff, or when user invokes /audit-issue."
+allowed-tools: shell
 ---
 
 # Audit Issue
@@ -51,9 +51,15 @@ For each checkbox in Requirements:
 
 For every function, type, or constant named in Blast Radius, run:
 
-```bash
-rg -n "<symbol>" src/
-```
+- **Windows PowerShell (Default):**
+  ```powershell
+  Select-String -Pattern "<symbol>" -Path (Get-ChildItem -Path src/ -Recurse -File).FullName
+  ```
+  *(or `rg -n "<symbol>" src/` if ripgrep is installed)*
+- **Bash / POSIX:**
+  ```bash
+  rg -n "<symbol>" src/
+  ```
 
 Compare results against the "Call-sites to update" table. Flag any live call-site that:
 
@@ -64,19 +70,29 @@ Compare results against the "Call-sites to update" table. Flag any live call-sit
 
 For every `it('should...')` in the ticket's Verification section:
 
-```bash
-rg -n "should <key phrase>" src/
-```
+- **Windows PowerShell (Default):**
+  ```powershell
+  Select-String -Pattern "should <key phrase>" -Path (Get-ChildItem -Path src/ -Recurse -File).FullName
+  ```
+- **Bash / POSIX:**
+  ```bash
+  rg -n "should <key phrase>" src/
+  ```
 
 Confirm the test exists in the diff or in an existing test file and is not skipped (`xit`, `it.skip`, `xtest`).
 
 ### 6. Guardrails check
 
-For each DO NOT rule in Guardrails & DO NOTs, grep the diff for the forbidden pattern:
+For each DO NOT rule in Guardrails & DO NOTs, check the diff for the forbidden pattern:
 
-```bash
-git diff main...HEAD | rg "<forbidden pattern>"
-```
+- **Windows PowerShell (Default):**
+  ```powershell
+  git diff main...HEAD | Select-String -Pattern "<forbidden pattern>"
+  ```
+- **Bash / POSIX:**
+  ```bash
+  git diff main...HEAD | rg "<forbidden pattern>"
+  ```
 
 Flag any hit.
 

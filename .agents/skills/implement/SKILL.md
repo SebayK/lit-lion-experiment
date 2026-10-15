@@ -1,8 +1,7 @@
 ---
 name: implement
-description: "Implement a piece of work based on a spec or set of tickets. Hardened for isolated agents: blocks silent requirement dropping via Skeleton-First TDD and a mandatory Self-Audit Gate before any commit."
+description: "Implement a piece of work based on a spec or set of tickets (issue-NN.md). Hardened for isolated agents: blocks silent requirement dropping via Skeleton-First TDD and a mandatory Self-Audit Gate before any commit. Use when asked to implement a ticket, build a feature from an issue, or when the user invokes /implement."
 allowed-tools: shell
-disable-model-invocation: true
 ---
 
 Implement the work described in the ticket file passed by the user.
@@ -35,8 +34,8 @@ For each file listed in the ticket's Blast Radius:
 
 - **In agents with a native Skill tool (Antigravity / Claude Code):** Use the targeted file read — do not invoke `repomix-context` for the whole repo.
 - **In GitHub Copilot Agent Mode:** Query repomix-output.xml only for the specific symbols named in the ticket:
-  - Bash: `rg -n -i "<symbol>" repomix-output.xml`
-  - PowerShell: `Select-String -Pattern "<symbol>" -Path repomix-output.xml`
+  - Windows PowerShell (Default): `Select-String -Pattern "<symbol>" -Path repomix-output.xml` (or `rg -n -i "<symbol>" repomix-output.xml`)
+  - Bash / POSIX: `rg -n -i "<symbol>" repomix-output.xml`
 
 Inspect only the files identified above.
 
@@ -70,13 +69,12 @@ Implement behaviour incrementally, one requirement checkbox at a time, using red
 
 Re-read the ticket file in full (`read_file issue-NN.md`). Compare every checkbox against your implementation.
 
-### Step 2 — Call-site grep
+### Step 2 — Call-site search
 
-For every function, type, or constant you created or renamed, run a grep across the whole repository:
+For every function, type, or constant you created or renamed, search across the repository:
 
-```
-rg -n "<symbol>" src/
-```
+- **Windows PowerShell (Default):** `Select-String -Pattern "<symbol>" -Path (Get-ChildItem -Path src/ -Recurse -File).FullName` (or `rg -n "<symbol>" src/`)
+- **Bash / POSIX:** `rg -n "<symbol>" src/`
 
 Verify that every call-site listed in the ticket's Blast Radius table has been updated. If you find an uncovered call-site not in the table, update it now.
 

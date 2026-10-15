@@ -1,7 +1,6 @@
 ---
 name: ask-matt
-description: Ask which skill or flow fits your situation. A router over the skills in this repo.
-disable-model-invocation: true
+description: "Ask which skill or flow fits your situation. A router over the skills in this repo. Use when unsure which skill to pick, asking for advice on workflow, or when user invokes /ask-matt."
 ---
 
 # Ask Matt

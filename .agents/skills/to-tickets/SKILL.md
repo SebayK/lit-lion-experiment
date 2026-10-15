@@ -1,7 +1,7 @@
 ---
 name: to-tickets
-description: Break a plan, spec, or conversation into tracer-bullet tickets. Each ticket is a Zero-Context-Loss self-contained work order that an isolated coding agent can execute without access to the grilling session history.
-disable-model-invocation: true
+description: "Break a plan, spec, or conversation into tracer-bullet tickets. Each ticket is a Zero-Context-Loss self-contained work order that an isolated coding agent can execute without access to the grilling session history. Use when asked to generate tickets, break a plan into tasks, or when user invokes /to-tickets."
+allowed-tools: shell
 ---
 
 # To Tickets

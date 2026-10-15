@@ -9,18 +9,19 @@ For any work that depends on repository structure, architecture, or source code:
 2. **Never ask the user to paste `repomix-output.xml` into the chat window, and do not attempt to load the entire XML file into context.**
 3. Verify that `repomix-output.xml` exists. If missing or empty, generate it via terminal (`npx repomix`).
 4. Search `repomix-output.xml` via terminal commands to find relevant types, components, and file paths:
-   - **POSIX (Linux/macOS):** `rg -n -i "<term>" repomix-output.xml`
-   - **Windows PowerShell:** `Select-String -Pattern "<term>" -Path repomix-output.xml`
+   - **Windows PowerShell (Default):** `Select-String -Pattern "<term>" -Path repomix-output.xml` (or `rg -n -i "<term>" repomix-output.xml` if ripgrep is installed)
    - **Windows CMD:** `findstr /N /I "<term>" repomix-output.xml`
+   - **POSIX (Linux/macOS):** `rg -n -i "<term>" repomix-output.xml`
 5. Read only the specific source files identified from the snapshot.
 
-## Cross-Platform Shell Guidelines (macOS / Linux / Windows)
+## Platform & Shell Guidelines (Default: Windows PowerShell)
 
-When executing terminal commands or guiding the user:
-- Detect the operating system shell (bash/zsh vs PowerShell vs CMD).
+Assume by default that the user operates on **Windows**:
+- Primary shell is **Windows PowerShell**. Always provide PowerShell-compatible commands by default.
 - Use cross-platform npm/node scripts where possible (`npm test`, `npx tsc --noEmit`).
-- On Windows PowerShell, use `Select-String` instead of `grep`/`rg` unless ripgrep is known to be installed.
-- On Windows CMD, use `findstr` and avoid Unix-only constructs like `&&` chained with Unix commands, `test -s`, or `/tmp/`.
+- For text searching, prefer `Select-String -Pattern "<term>" -Path <file>` or `rg` if ripgrep is available on PATH.
+- Avoid Unix-only constructs (such as `test -s`, `/tmp/`, `export VAR=...`, or unquoted paths with spaces) unless explicitly instructed otherwise.
+- In Git commands on Windows, keep paths forward-slash or properly quoted.
 
 ## Architecture and Domain Docs
 
@@ -56,12 +57,35 @@ When implementing tasks or working with tests:
 5. **Skeleton-First:** Before modifying any business logic, list all ticket checkboxes and create failing test stubs from the Verification section. Confirm red before writing production code.
 6. **No placeholders:** Zero tolerance for `// TODO`, unused abstractions, or placeholder return values. Prefer the simplest diff that uses existing project utilities.
 
-## Available Agent Skills
+## Available Agent Skills & CLI Invocation
 
-This repository uses the Agent Skills standard located in `.agents/skills/`. When performing tasks, read the instructions in:
-- `.agents/skills/implement/SKILL.md` — Skeleton-First TDD, Codex hardening, Self-Audit Gate.
-- `.agents/skills/to-tickets/SKILL.md` — Zero-Context-Loss ticket format and publication checklist.
-- `.agents/skills/audit-issue/SKILL.md` — Post-implement adversarial diff-vs-ticket audit; run before Repomix snapshot.
-- `.agents/skills/repomix-context/SKILL.md` — Snapshot verification and symbol search.
-- `.agents/skills/tdd/SKILL.md` — Test-driven development workflow.
-- `.agents/skills/code-review/SKILL.md` — Code review standards and checklists.
+This repository uses the Agent Skills standard located in `.agents/skills/`.
+When performing tasks, Copilot CLI invokes these skills via the `skill` tool or slash commands:
+- `/implement` (`.agents/skills/implement/SKILL.md`) — Skeleton-First TDD, Codex hardening, Self-Audit Gate.
+- `/to-tickets` (`.agents/skills/to-tickets/SKILL.md`) — Zero-Context-Loss ticket generation and publication checklist.
+- `/audit-issue` (`.agents/skills/audit-issue/SKILL.md`) — Post-implement adversarial diff-vs-ticket audit; run before Repomix snapshot.
+- `/repomix-context` (`.agents/skills/repomix-context/SKILL.md`) — Snapshot verification and symbol search.
+- `/tdd` (`.agents/skills/tdd/SKILL.md`) — Test-driven development loop.
+- `/code-review` (`.agents/skills/code-review/SKILL.md`) — Dual-axis review (Standards + Spec).
+
+### CLI Execution Modes:
+- **Interactive Mode:** Type the slash command directly (e.g. `/implement .scratch/<feature>/issues/01.md`).
+- **Script / Non-Interactive Mode (`copilot -p` / `gh copilot -p`):** Slash commands are not expanded in prompt mode. Use explicit tool instructions:
+  `copilot -p 'Use the skill tool to invoke the "implement" skill for .scratch/feature/issues/01.md' --allow-all`
+
+## Copilot CLI Plan Mode & Workflow Integration
+
+Follow the official **Explore → Plan → Code → Commit** workflow:
+1. **Explore:** Scoped inspection using `repomix-output.xml` search or ticket Blast Radius. Do not write code yet.
+2. **Plan (`/plan`):** For multi-step tasks without ready tickets, press `Shift+Tab` or run `/plan` to generate structured implementation steps, or run `/to-tickets` to emit Zero-Context-Loss micro-tickets.
+3. **Code (`/implement`):** Work one ticket at a time using red-green-refactor.
+4. **Audit (`/audit-issue`):** Adversarially verify git diff against ticket checkboxes before commit.
+5. **Review (`/review` or `/code-review`):** Validate against coding standards and specs before opening PR.
+
+## Token & AI Credit Optimization Protocols
+
+To minimize token consumption, avoid context window saturation, and preserve reasoning sharpness (staying within the Smart Zone):
+1. **Context Reset Between Tickets:** Always run `/clear` or `/new` between tickets. Tickets are 100% self-contained work orders; keeping past conversation history dilutes model attention and wastes AI credits.
+2. **Zero Global Dumps:** Never load full `repomix-output.xml`, complete ADR folders, or previous transcripts into context. Query only specific symbols via PowerShell (`Select-String -Pattern "<term>" -Path repomix-output.xml`) or read designated Blast Radius files.
+3. **Compact at Phase Boundaries:** If a complex design or exploration session nears 100k+ tokens before ticket emission, run `/compact` to summarize history before proceeding to implementation.
+4. **Subagent Offloading:** Let Copilot offload command execution and repo searches to built-in subagents (`task`, `explore`) to keep main session context lean.
