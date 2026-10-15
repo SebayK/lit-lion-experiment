@@ -1,7 +1,7 @@
 ---
 name: improve-codebase-architecture
-description: Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.
-disable-model-invocation: true
+description: "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick. Use when reviewing codebase structure, finding refactoring seams, or when user invokes /improve-codebase-architecture."
+allowed-tools: shell
 ---
 
 # Improve Codebase Architecture
@@ -15,7 +15,7 @@ This command is _informed_ by the project's domain model and built on a shared d
 
 ## Codebase context
 
-Before exploring, call the Skill tool with `"repomix-context"` to build a snapshot of the codebase. Ask the user which paths to focus on (or use the hot-spot heuristic from step 1 if they leave it blank), and whether to use `--compress`. Use the snapshot in step 1 to identify shallow modules and friction without spawning a sub-agent for raw file traversal.
+Before exploring, call the Skill tool with `"repomix-context"` to load the codebase snapshot. It reuses `repomix-output.xml` when available and generates a focused snapshot when needed. Use the snapshot in step 1 to identify shallow modules and friction without spawning a sub-agent for raw file traversal.
 
 ## Process
 

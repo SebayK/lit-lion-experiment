@@ -14,7 +14,7 @@ The issue tracker should have been provided to you. If `docs/agents/issue-tracke
 
 ## Codebase context
 
-Before pinning the fixed point, call the Skill tool with `"repomix-context"` to build a scoped snapshot of the codebase. Ask the user which paths to include (e.g. the directories touched by the diff) and whether to use `--compress`. Use the snapshot throughout steps 3–4 to verify standards and locate the spec.
+Before pinning the fixed point, call the Skill tool with `"repomix-context"`. It reuses `repomix-output.xml` when available and generates it only when needed. Use the snapshot throughout steps 3–4 to verify standards and locate the spec; use the working tree for the exact diff.
 
 ## Process
 

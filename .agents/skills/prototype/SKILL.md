@@ -9,7 +9,7 @@ A prototype is **throwaway code that answers a question**. The question decides 
 
 ## Codebase context
 
-Before picking a branch, call the Skill tool with `"repomix-context"` to pack the area of the codebase the prototype will sit next to. Ask the user which path contains the module or page being prototyped, and whether to use `--compress`. Use the snapshot to read existing patterns (routing convention, state shape, component style) so the prototype fits without creating new structure.
+Before picking a branch, call the Skill tool with `"repomix-context"` to load the area of the codebase the prototype will sit next to. It reuses `repomix-output.xml` when available and generates a focused snapshot when needed. Use the snapshot to read existing patterns (routing convention, state shape, component style) so the prototype fits without creating new structure.
 
 ## Pick a branch
 

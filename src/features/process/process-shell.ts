@@ -4,7 +4,7 @@ import { provide } from "@lit/context";
 import { Routes } from "@lit-labs/router";
 import { ProcessController } from "./controllers/process-controller.js";
 import { processContext } from "./context.js";
-import type { ProcessStep } from "./types.js";
+import type { ProcessStep, EmailVerificationResult, PhoneVerificationResult } from "./types.js";
 import "./components/process-live-summary.js";
 
 @customElement("process-shell")
@@ -358,6 +358,20 @@ export class ProcessShell extends LitElement {
     window.dispatchEvent(new PopStateEvent("popstate"));
   }
 
+  private _handleEmailVerificationSuccess(event: CustomEvent<EmailVerificationResult>): void {
+    event.stopPropagation();
+    if (this.processCtrl.completeEmailVerification(event.detail)) {
+      this.goto('/process/phone-verification');
+    }
+  }
+
+  private _handlePhoneVerificationSuccess(event: CustomEvent<PhoneVerificationResult>): void {
+    event.stopPropagation();
+    if (this.processCtrl.completePhoneVerification(event.detail)) {
+      this.goto('/process/dashboard');
+    }
+  }
+
   /**
    * Shows a notification to the user when they are redirected due to missing prerequisites.
    * The notification auto-dismisses after 3 seconds.
@@ -391,7 +405,7 @@ export class ProcessShell extends LitElement {
   static styles = css`
     :host {
       display: block;
-      padding: 1.5rem;
+      padding: var(--app-page-padding, 1.5rem);
       animation: fadeIn 0.3s ease-in-out;
     }
 
@@ -466,9 +480,10 @@ export class ProcessShell extends LitElement {
 
     .stepper {
       display: flex;
+      flex-wrap: wrap;
       justify-content: center;
       align-items: center;
-      gap: 1.5rem;
+      gap: 0.75rem;
       margin-bottom: 2.5rem;
       padding: 1.25rem;
       background: #ffffff;
@@ -541,6 +556,17 @@ export class ProcessShell extends LitElement {
       width: 40px;
       height: 2px;
       background: #e2e8f0;
+    }
+
+    @media (max-width: 640px) {
+      .stepper {
+        justify-content: flex-start;
+        padding: 1rem;
+      }
+
+      .step-divider {
+        display: none;
+      }
     }
   `;
 
@@ -625,7 +651,11 @@ export class ProcessShell extends LitElement {
         <process-live-summary></process-live-summary>
 
         <!-- Nested Router Outlet -->
-        <main @request-navigate=${(e: CustomEvent<string>) => this.goto(e.detail)}>
+        <main
+          @request-navigate=${(e: CustomEvent<string>) => this.goto(e.detail)}
+          @email-verification-success=${this._handleEmailVerificationSuccess}
+          @phone-verification-success=${this._handlePhoneVerificationSuccess}
+        >
           ${this.routes.outlet()}
         </main>
       </div>

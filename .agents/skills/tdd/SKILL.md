@@ -11,7 +11,7 @@ When exploring the codebase, read `CONTEXT.md` (if it exists) so test names and 
 
 ## Codebase context
 
-Before agreeing seams with the user, call the Skill tool with `"repomix-context"` to pack the relevant modules. Ask the user which paths cover the feature under test, and whether to use `--compress`. Use the snapshot when identifying seams, writing test stubs, and understanding collaborators.
+Before agreeing seams with the user, call the Skill tool with `"repomix-context"` to load the relevant modules. It reuses `repomix-output.xml` when available and generates a focused snapshot when needed. Use the snapshot when identifying seams, writing test stubs, and understanding collaborators.
 
 ## What a good test is
 

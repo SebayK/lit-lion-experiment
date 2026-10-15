@@ -4,6 +4,10 @@ Project-level guidance for AI coding agents working in this repo.
 
 ## Agent skills
 
+### Codebase context
+
+For work that depends on repository structure or source code, invoke `.agents/skills/repomix-context` before exploring. It reuses a non-empty `repomix-output.xml` when available and generates one with Repomix when needed. Use the working tree for exact current diffs, conflict state, generated files, and files the task changes.
+
 ### Issue tracker
 
 Issues live as local markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
@@ -16,3 +20,19 @@ Using the default five-label vocabulary (needs-triage, needs-info, ready-for-age
 
 Single-context layout — `CONTEXT.md` at the repo root, ADRs under `docs/adr/`. See `docs/agents/domain.md`.
 
+### Ticket handoff (Zero-Context-Loss)
+
+Tickets are written by an Architect model (M365 Copilot / high-reasoning) and executed by a coding agent (GitHub Copilot Codex) in a fresh context window. Tickets must be **fully self-contained**: every contract, interface, and constraint is inlined — no external references to ADR files or SPEC.md. See `.agents/skills/to-tickets/SKILL.md` for the template and publication checklist.
+
+- **Ticket Sizing Rule:** Every ticket has 3–5 atomic checkboxes (~120–150 lines of diff). Anything larger is split into sequential micro-tickets (`01a`, `01b`).
+- **Pre-authored Test File (Golden Ticket):** Whenever possible, the Architect provides a complete, runnable failing test file (`.test.ts`). The coding agent is forbidden from editing assertions.
+
+After `/implement`, run `/audit-issue` on a clean chat before snapshotting with Repomix. The audit skill performs an adversarial diff-vs-ticket check and patches all gaps it finds.
+
+### Implementation & Quality Guardrails
+
+- Consult `.agents/skills/implement/SKILL.md` for the TDD cycle, Skeleton-First flow, and Self-Audit Gate.
+- **Anti-Gaming:** Agents must never hardcode mock values or branch specifically for test inputs.
+- **Anti-Silent-Drop:** The Self-Audit Gate in `/implement` is mandatory. The agent must re-read the ticket, grep all changed symbols, compile, run tests, and produce a per-checkbox audit table before committing. Any MISSING row must be patched in the same turn.
+- **Architecture:** Keep business/validation logic in headless domain modules (`domain/` or controllers); Lit components remain thin presentation layers using `@open-wc/scoped-elements` and `@lion/ui`.
+- **Review:** All changes must satisfy both **Spec** (complete requirements) and **Standards** (clean architecture, no Fowler smells) via `.agents/skills/code-review/SKILL.md`.

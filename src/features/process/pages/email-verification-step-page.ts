@@ -1,8 +1,23 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
 import type { ProcessController } from '../controllers/process-controller.js';
 import { processContext } from '../context.js';
+import {
+  AuthenticationModule,
+  type AuthenticationAdapter,
+  type VerificationResult,
+} from '../../authentication/authentication-module.js';
+import { HttpAuthenticationAdapter } from '../../authentication/authentication-adapter.js';
+import '../../authentication/authentication-code-verification.js';
+
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
 
 @customElement('email-verification-step-page')
 export class EmailVerificationStepPage extends LitElement {
@@ -15,6 +30,29 @@ export class EmailVerificationStepPage extends LitElement {
 
   @state()
   private error: string = '';
+
+  /** Optional injection seam for the page's parent and component tests. */
+  @property({ attribute: false })
+  authenticationAdapter: AuthenticationAdapter = new HttpAuthenticationAdapter();
+
+  /** A parent may provide a longer-lived module instance. */
+  @property({ attribute: false })
+  authenticationModule?: AuthenticationModule;
+
+  @state()
+  private ownedAuthenticationModule?: AuthenticationModule;
+
+  private subscribedProcess?: ProcessController;
+  private subscribedModule?: AuthenticationModule;
+  private unsubscribeProcess?: () => void;
+  private unsubscribeModule?: () => void;
+  private processApplicationId?: string;
+  private resetCleanup?: {
+    controller: ProcessController;
+    module: AuthenticationModule;
+    applicationId: string;
+    unregister: () => void;
+  };
 
   static styles = css`
     :host {
@@ -148,37 +186,105 @@ export class EmailVerificationStepPage extends LitElement {
     }
   `;
 
-  private _validateEmail(email: string): boolean {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+  private get activeAuthenticationModule(): AuthenticationModule | undefined {
+    return this.authenticationModule ?? this.ownedAuthenticationModule;
+  }
+
+  protected willUpdate(): void {
+    if (!this.isConnected) return;
+    if (this.subscribedProcess !== this.processCtrl) {
+      this.unsubscribeProcess?.();
+      this.subscribedProcess = this.processCtrl;
+      this.unsubscribeProcess = this.processCtrl?.subscribe(this);
+    }
+    if (this.processCtrl && this.processApplicationId !== this.processCtrl.applicationId) {
+      if (this.processApplicationId) {
+        this.email = '';
+        this.error = '';
+      }
+      this.processApplicationId = this.processCtrl.applicationId;
+    }
+    if (
+      this.processCtrl &&
+      !this.authenticationModule &&
+      this.ownedAuthenticationModule?.applicationId !== this.processCtrl.applicationId
+    ) {
+      this.ownedAuthenticationModule = new AuthenticationModule({
+        applicationId: this.processCtrl.applicationId,
+        channel: 'email',
+        adapter: this.authenticationAdapter,
+      });
+    }
+    const controller = this.processCtrl;
+    const module = this.activeAuthenticationModule;
+    if (this.resetCleanup?.controller !== controller || this.resetCleanup?.module !== module ||
+        this.resetCleanup?.applicationId !== controller?.applicationId) {
+      this.resetCleanup?.unregister();
+      this.resetCleanup = undefined;
+      if (controller && module) {
+        this.resetCleanup = {
+          controller,
+          module,
+          applicationId: controller.applicationId,
+          unregister: controller.registerResetCleanup(() => module.clear()),
+        };
+      }
+    }
+    if (this.subscribedModule !== this.activeAuthenticationModule) {
+      this.unsubscribeModule?.();
+      this.subscribedModule = this.activeAuthenticationModule;
+      this.unsubscribeModule = this.subscribedModule?.subscribe(() => this.requestUpdate());
+    }
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    this.requestUpdate();
+  }
+
+  disconnectedCallback(): void {
+    this.unsubscribeProcess?.();
+    this.unsubscribeModule?.();
+    this.subscribedProcess = undefined;
+    this.subscribedModule = undefined;
+    // Only page-owned state ends with this page; injected state belongs to its parent.
+    this.ownedAuthenticationModule?.clear();
+    if (this.resetCleanup?.module === this.ownedAuthenticationModule) {
+      this.resetCleanup?.unregister();
+      this.resetCleanup = undefined;
+    }
+    super.disconnectedCallback();
   }
 
   private _handleEmailChange(e: Event): void {
     const input = e.target as HTMLInputElement;
-    this.email = input.value;
+    const nextEmail = input.value;
+    const module = this.activeAuthenticationModule;
+    if (module?.contact && normalizeEmail(nextEmail) !== module.contact) {
+      module.clear();
+    }
+    this.email = nextEmail;
     this.error = '';
   }
 
-  private _handleVerify(): void {
+  private _handleStart(): void {
     if (!this.email) {
       this.error = 'Adres email jest wymagany';
       return;
     }
 
-    if (!this._validateEmail(this.email)) {
+    const normalizedEmail = normalizeEmail(this.email);
+    if (!isValidEmail(normalizedEmail)) {
       this.error = 'Podaj prawidłowy adres email';
       return;
     }
 
-    this.processCtrl?.completeEmailVerification(this.email);
-
-    this.dispatchEvent(
-      new CustomEvent("request-navigate", {
-        detail: "/process/phone-verification",
-        bubbles: true,
-        composed: true,
-      })
-    );
+    this.email = normalizedEmail;
+    this.error = '';
+    const module = this.activeAuthenticationModule;
+    if (module) {
+      void module.start(normalizedEmail).catch(() => undefined);
+    }
   }
 
   private _handleBack(): void {
@@ -191,6 +297,18 @@ export class EmailVerificationStepPage extends LitElement {
     );
   }
 
+  private _handleAuthenticationSuccess(event: CustomEvent<VerificationResult>): void {
+    event.stopPropagation();
+    const module = this.activeAuthenticationModule;
+    if (!module?.contact || module.status !== 'success' || !module.result ||
+        module.applicationId !== this.processCtrl?.applicationId || module.channel !== 'email') return;
+    this.dispatchEvent(new CustomEvent('email-verification-success', {
+      detail: { applicationId: module.applicationId, email: module.contact, verificationToken: module.result.verificationToken },
+      bubbles: true,
+      composed: true,
+    }));
+  }
+
   render() {
     if (!this.processCtrl) {
     
@@ -201,8 +319,7 @@ export class EmailVerificationStepPage extends LitElement {
         </div>
       `;
     }
-    console.log('email', this.email)
-    console.log('processController', this.processCtrl)
+    const authenticationModule = this.activeAuthenticationModule;
     return html`
       <div class="verification-card">
         <h2>Weryfikacja adresu email</h2>
@@ -220,7 +337,7 @@ export class EmailVerificationStepPage extends LitElement {
             placeholder="twoj@email.pl"
             .value=${this.email}
             @input=${this._handleEmailChange}
-            @keypress=${(e: KeyboardEvent) => e.key === 'Enter' && this._handleVerify()}
+            @keypress=${(e: KeyboardEvent) => e.key === 'Enter' && this._handleStart()}
           />
           ${this.error ? html`<div class="error-message">${this.error}</div>` : ''}
         </div>
@@ -232,12 +349,17 @@ export class EmailVerificationStepPage extends LitElement {
           <button 
             type="button" 
             class="btn btn-primary" 
-            @click=${this._handleVerify}
-            ?disabled=${!this.email}
+            @click=${this._handleStart}
+            ?disabled=${!this.email || authenticationModule?.isSending}
           >
-            Zweryfikuj email &rarr;
+            Dalej &rarr;
           </button>
         </div>
+
+        <authentication-code-verification
+          .module=${authenticationModule}
+          @authentication-success=${this._handleAuthenticationSuccess}
+        ></authentication-code-verification>
       </div>
     `;
   }

@@ -1,11 +1,8 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { ScopedElementsMixin } from '@open-wc/scoped-elements/lit-element.js';
-import { StoreController } from '../../../shared/store/StoreController.js';
-import { store } from '../../../shared/store/index.js';
-import { addIncome, updateIncome, deleteIncome } from '../store/income-slice.js';
 import { Income, IncomeStepConfig } from '../types.js';
-import { ValidationEngine } from '../domain/validation-engine.js';
+import { IncomeStepController } from '../controllers/income-step-controller.js';
 
 import { IncomeTable } from './income-table.js';
 import { IncomeDialog } from './income-dialog.js';
@@ -42,7 +39,7 @@ export class IncomeApp extends ScopedElementsMixin(LitElement) {
     }
   `;
 
-  private store = new StoreController(this);
+  private readonly incomeController = new IncomeStepController(this);
 
   @state() private _invalidIncomeId?: string;
 
@@ -54,29 +51,21 @@ export class IncomeApp extends ScopedElementsMixin(LitElement) {
    * @returns `true` when all incomes are complete.
    */
   validateStep(): boolean {
-    const incomes = this.store.state.incomes.items;
-    const invalid = incomes.find(income => !ValidationEngine.isIncomeValid(income, this.config));
+    const invalid = this.incomeController.firstIncomplete(this.config);
     this._invalidIncomeId = invalid?.id;
     return !invalid;
   }
 
   private handleSave(e: CustomEvent<Income>) {
-    const income = e.detail;
-    const isExisting = this.store.state.incomes.items.some(i => i.id === income.id);
-    
-    if (isExisting) {
-      store.dispatch(updateIncome(income));
-    } else {
-      store.dispatch(addIncome(income));
-    }
+    this.incomeController.save(e.detail);
   }
 
   private handleDelete(e: CustomEvent<string>) {
-    store.dispatch(deleteIncome(e.detail));
+    this.incomeController.delete(e.detail);
   }
 
   render() {
-    const incomes = this.store.state.incomes.items;
+    const incomes = this.incomeController.incomes;
 
     return html`
       <h1>Zarządzanie Dochodami</h1>

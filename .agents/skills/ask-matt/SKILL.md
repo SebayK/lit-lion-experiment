@@ -1,7 +1,6 @@
 ---
 name: ask-matt
-description: Ask which skill or flow fits your situation. A router over the skills in this repo.
-disable-model-invocation: true
+description: "Ask which skill or flow fits your situation. A router over the skills in this repo. Use when unsure which skill to pick, asking for advice on workflow, or when user invokes /ask-matt."
 ---
 
 # Ask Matt
@@ -30,6 +29,14 @@ The route most work travels. You have an idea and want it built.
 Keep steps 1–3 in **one unbroken context window** (don't compact or clear until after `/to-tickets`) so the grilling, spec, and tickets all build on the same thinking. Each `/implement` then starts fresh, working from the ticket.
 
 The limit on this is the **[smart zone](https://www.aihero.dev/ai-coding-dictionary/smart-zone)**: the window (~150k tokens on state-of-the-art models) within which the model still reasons sharply. If a session approaches it before `/to-tickets`, don't push on degraded; `/compact` at the nearest phase boundary and carry on (see Phase boundaries).
+
+### Asymmetric multi-tool execution (Architect ↔ Agent)
+
+When using a high-reasoning model without agent tools (e.g. M365 Copilot / web chat with unlimited tokens) as the **Architect** and an agent with limited execution credits (e.g. GitHub Copilot Agent Mode) as the **Executor**:
+1. **Architect (M365):** Run steps 1–3 (`/grill-with-docs` → `/to-spec` → `/to-tickets`). Have the architect write the failing contract test (`.test.ts`) and explicit architectural layer constraints in the ticket.
+2. **Executor (GH Copilot Agent):** Run `/implement` with a single goal: make the existing pre-authored test pass. The agent is forbidden from modifying test assertions and forbidden from test-gaming (no hardcoded return values; must respect `CONTEXT.md` and repository architectural patterns).
+3. **Reviewer (M365):** Copy the `git diff` into the architect model and execute `/code-review` on both axes (**Spec** + **Standards**) before committing.
+
 
 ## On-ramps
 
