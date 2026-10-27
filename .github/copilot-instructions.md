@@ -56,6 +56,11 @@ When implementing tasks or working with tests:
    - Produce a per-checkbox audit table: `| # | Requirement | Status (DONE/MISSING) | File:Line |`. Any MISSING row must be patched in the same turn before committing.
 5. **Skeleton-First:** Before modifying any business logic, list all ticket checkboxes and create failing test stubs from the Verification section. Confirm red before writing production code.
 6. **No placeholders:** Zero tolerance for `// TODO`, unused abstractions, or placeholder return values. Prefer the simplest diff that uses existing project utilities.
+7. **Scoped Modular Instructions (`.github/instructions/`):**
+   Detailed file-type specific guidelines are modularized and automatically injected by GitHub Copilot via `applyTo` globs:
+   - [TypeScript & Clean Code Standards](.github/instructions/typescript-standards.instructions.md) (`applyTo: '**/*.ts'`): Type modeling hierarchy (unions default, `as const` for runtime, zero `enum`), `interface` vs `type`, safe destructuring, Refactoring Guru code smells (Composed Method, SLAP, Guard Clauses, Rule of Three), and modern ES2023/ES2024 idioms.
+   - [Architecture, State & Layering Guidelines](.github/instructions/architecture-vsa.instructions.md) (`applyTo: 'src/**/*.ts'`): Vertical Slice Architecture (VSA) with public `index.ts` boundaries, Headless Domain logic (SRP) vs thin Lit views, Redux Toolkit (`createSlice`) event-driven patterns, and dynamic import code splitting.
+   - [Testing, TDD & Anti-Gaming Guardrails](.github/instructions/testing-tdd.instructions.md) (`applyTo: '**/*.test.ts'`): Strict anti-gaming / anti-overfitting rules, pre-authored test assertion protection, Skeleton-First TDD flow, and characterization testing.
 
 ## Available Agent Skills & CLI Invocation
 
