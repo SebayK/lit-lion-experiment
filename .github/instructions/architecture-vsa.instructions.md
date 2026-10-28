@@ -8,12 +8,18 @@ Guidelines for Vertical Slice Architecture, Lit components, and Redux Toolkit wi
 
 ## 1. Vertical Slice Architecture (VSA)
 
-- **Feature Organization:**
-  Group features under `src/features/<feature-name>/` (e.g. `src/features/income/`, `src/features/authentication/`). Each feature contains its own UI components, headless domain engines, and RTK store slice.
+- **Slice Organization (`src/pages/<step-or-page>/` or `src/features/<feature>/`):**
+  Vertical Slices are organized primarily by process steps/pages under `src/pages/<step-name>/` (or feature slices under `src/features/<feature-name>/`).
+  In a multi-step application process / wizard, organizing slices around `src/pages/` is an industry-standard, highly cohesive approach. Each folder encapsulates its entire vertical stack:
+  - `components/` — Lit UI presentation components and form controls
+  - `domain/` — headless validation engine, specifications, and business rules (zero DOM/Lit dependencies)
+  - `store/` — dedicated Redux Toolkit slice
+  - `types.ts` — local domain types and interfaces
+  - `index.ts` — public API barrier consumed by the Process Shell / router
 - **Public API Barrier (`index.ts`):**
-  External modules must consume a feature solely via its public entry point `src/features/<feature-name>/index.ts`. Deep imports into internal files (e.g. `../income/domain/internal-helper.js`) are strictly forbidden.
+  External modules (e.g. Process Shell, router, layout) must consume a step/page slice solely via its public barrel (`src/pages/<step>/index.ts` or `src/features/<feature>/index.ts`). Deep imports into internal files (e.g. `../pages/income/domain/internal-helper.js`) are strictly forbidden.
 - **Shared Code Discipline:**
-  Only truly generic utilities, cross-feature contracts, and base wrappers belong in `src/shared/`. Never import feature-specific code into `src/shared/`.
+  Only truly generic utilities, cross-step contracts ([Shared Domain Contract](file:///Users/sebastian/Projects/lit-lion-experiment/CONTEXT.md#L59)), and base Lion/Lit wrappers belong in `src/shared/`. Never import step-specific code into `src/shared/`.
 
 ## 2. Single Responsibility & Headless Domain
 
@@ -38,7 +44,7 @@ Guidelines for Vertical Slice Architecture, Lit components, and Redux Toolkit wi
 ## 4. Dynamic Loading & Code Splitting
 
 - **Lazy-Load Process Steps:**
-  Discrete Process Steps (`Process Step`) must not be imported statically in the initial application bundle. Use dynamic imports (`await import('../features/income/index.js')`) when entering each step.
+  Discrete Process Steps (`Process Step`) must not be imported statically in the initial application bundle. Use dynamic imports (`await import('../pages/income/index.js')` or `await import('../features/income/index.js')`) when entering each step.
 - **Lazy-Load Heavy Dialogs:**
   Heavy modal dialogs, secondary workflows, and outlier product features must be loaded on-demand.
 - **WebView Performance:**
