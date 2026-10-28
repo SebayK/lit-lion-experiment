@@ -49,10 +49,27 @@ Instructions for authoring, editing, and refactoring TypeScript code in this rep
 
 ## 4. Refactoring Guru Smells & Clean Code
 
-- **Composed Method & SLAP:** Eliminate *Long Method*. Functions must operate at a Single Level of Abstraction (SLAP). Top-level methods must read like a high-level script/table of contents, delegating low-level operations to helper functions.
-- **Guard Clauses:** Eliminate nested conditionals (*Arrow Anti-Pattern*) with early inverted guard clauses and early returns.
-- **Pragmatic DRY (Rule of Three):** Duplicate twice safely; extract an abstraction on the third repetition. Derive types from a single source of truth (`typeof`, `keyof`, `ReturnType`), but never prematurely unify distinct domain models that coincidentally share shapes.
-- **Eliminate Primitive Obsession & Data Clumps:** Use Branded Types (`Brand<string, 'UserId'>`) for identifiers and Parameter Objects for grouped parameters.
+Apply the refactoring catalog from [Refactoring.Guru](https://refactoring.guru/refactoring/smells) systematically:
+
+### A. Bloaters (Excessive Code Size)
+- **Long Method:** Functions must not exceed ~15–20 lines. Apply **Composed Method** and **SLAP (Single Level of Abstraction)**: top-level functions must read like a high-level script/table of contents, delegating detail steps to well-named helper functions.
+- **Primitive Obsession:** Do not use raw `string` or `number` for domain-critical identifiers or currencies. Use **Branded Types** (`Brand<string, 'UserId'>`) or Value Objects.
+- **Data Clumps & Long Parameter List:** When 3+ parameters travel together (e.g., `amount`, `currency`, `period`), apply **Introduce Parameter Object** to group them into a typed interface (e.g. `CalculationData`).
+- **Large Class:** Split oversized classes by SRP into headless domain modules and focused UI components.
+
+### B. Control Flow & Logic Smells
+- **Nested Conditionals (*Arrow Anti-Pattern*):** Eliminate pyramids of `if/else` by applying **Replace Nested Conditional with Guard Clauses** (invert conditions and exit early with `return`).
+- **Switch Statements Smell:** Avoid monolithic `switch/case` branches for domain logic; prefer **Strategy Pattern** or lookup dispatch maps (`Record<Status, Handler>`). Note: when `switch` is required for union narrowing, enforce exhaustiveness via `assertNever(val: never)`.
+
+### C. Change Preventers & Couplers
+- **Feature Envy:** If a function in Module A predominantly accesses data properties of Module B, apply **Move Method** to colocate the logic with the data it manipulates.
+- **Inappropriate Intimacy & Shotgun Surgery:** Enforce strict Vertical Slice encapsulation. Never allow deep intra-feature imports; all cross-slice communication must flow strictly through the slice's public `index.ts`.
+- **Divergent Change:** A module must have only one reason to change (SRP). Separate API translation (`ProductAdapter`) from domain rules (`domain/`) and rendering (`components/`).
+
+### D. Dispensables (Dead Weight)
+- **Comments as Deodorant:** Do not explain messy code with comments. Refactor the code and extract well-named functions so the code documents itself. Reserve comments exclusively for non-obvious "why" rationale.
+- **Duplicate Code (Rule of Three):** Duplicate twice safely; extract a shared abstraction on the third repetition. Derive types from single sources of truth (`typeof`, `keyof`, `ReturnType`), but never prematurely unify distinct domain models that coincidentally share shapes.
+- **Dead Code & Speculative Generality:** Zero tolerance for unused abstractions, commented-out blocks, or parameters prepared "just in case" (YAGNI).
 
 ## 5. Modern JavaScript (ES2023 / ES2024)
 
