@@ -71,6 +71,15 @@ Apply the refactoring catalog from [Refactoring.Guru](https://refactoring.guru/r
 - **Duplicate Code (Rule of Three):** Duplicate twice safely; extract a shared abstraction on the third repetition. Derive types from single sources of truth (`typeof`, `keyof`, `ReturnType`), but never prematurely unify distinct domain models that coincidentally share shapes.
 - **Dead Code & Speculative Generality:** Zero tolerance for unused abstractions, commented-out blocks, or parameters prepared "just in case" (YAGNI).
 
+### E. Code Smells Triggering Design Patterns (Refactoring to Patterns)
+When encountering specific code smells, refactor toward these established design patterns:
+- **Alternative Classes with Different Interfaces** ➔ **Adapter Pattern:** When 2+ services/backends perform equivalent tasks with incompatible interfaces (e.g. legacy vs modern product APIs), wrap them with dedicated Adapters (`ProductAdapter`) that normalize to the `Shared Domain Contract`.
+- **Switch Statements on Type Code** ➔ **Strategy Pattern / State Pattern:** When a method branches heavily on a type code or state flag, encapsulate each variation into interchangeable strategy objects or state classes.
+- **Duplicate Algorithm Skeletons with Minor Variances** ➔ **Template Method Pattern:** When multiple processes share identical lifecycle steps (init -> validate -> submit) but differ in 1–2 internal steps, establish a common pipeline skeleton that delegates variant steps.
+- **Data Clumps & Complex Object Assembly** ➔ **Builder / Factory Pattern:** When constructing entities requires validating and assembling many dependent fields, encapsulate construction in a Factory or Builder function.
+- **Feature Envy & Tight Coupling** ➔ **Observer / Event-Driven Architecture:** When components tightly couple to trigger downstream side effects, decouple via semantic domain events (Redux Toolkit slices or CustomEvent dispatching).
+- **Inappropriate Intimacy / Middle Man** ➔ **Facade Pattern:** When external code reaches deep into complex subsystems, provide a clean, single-point Facade (the feature's public `index.ts`).
+
 ## 5. Modern JavaScript (ES2023 / ES2024)
 
 - **Non-mutating Array Methods:** Prefer `toSorted()`, `toReversed()`, `toSpliced()`, and `with(index, value)` over mutating counterparts.
