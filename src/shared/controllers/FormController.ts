@@ -6,10 +6,15 @@ import type { ReactiveController, ReactiveControllerHost } from 'lit';
 // These are structural (duck-typed) — no direct import from @lion/ui so the
 // controller stays version-agnostic.
 
+/** Lion's internal group meta-validator indicating at least one child element has an error. */
+const FORM_ELEMENTS_HAVE_NO_ERROR = 'FormElementsHaveNoError';
+
 /** Minimal surface of a lion form-group / LionForm element. */
 interface LionFormLike extends HTMLElement {
   /** Active feedback types, e.g. `['error', 'warning']`. */
   hasFeedbackFor: string[];
+  /** Keyed validation states: `{ error: { Required: {} }, ... }`. */
+  validationStates?: Record<string, Record<string, unknown>>;
   /** Registered child fields, keyed by name. */
   formElements: { [key: string]: LionFieldLike | LionFieldLike[] } & Iterable<LionFieldLike>;
   /** Marks the form submitted, revealing feedback on every child. */
@@ -28,6 +33,8 @@ interface LionFormLike extends HTMLElement {
   serializedValue: Record<string, unknown>;
   /** @lion/form protected method — available via duck-typing on LionForm. */
   _setFocusOnFirstErroneousFormElement?: (el: LionFormLike) => void;
+  /** Resolves once initial child element registration has settled. */
+  registrationComplete?: Promise<void>;
 }
 
 
@@ -39,8 +46,8 @@ interface LionFieldLike extends HTMLElement {
   validationStates?: Record<string, Record<string, unknown>>;
   /** The focusable native node inside the field (e.g. `<input>`). */
   _focusableNode?: HTMLElement;
-  /** Present when this field is itself a form-group (nested fieldset). */
-  formElements?: { [key: string]: LionFieldLike | LionFieldLike[] };
+  /** Present when this field is itself a form-group (nested fieldset or choice group). */
+  formElements?: { [key: string]: LionFieldLike | LionFieldLike[] } & Iterable<LionFieldLike>;
   /** True for LionFieldset / LionForm, false for choice groups (LionRadioGroup, LionCheckboxGroup). */
   _isFormOrFieldset?: boolean;
 }
@@ -103,13 +110,20 @@ export interface FieldErrors {
  * @template T - Shape of the form's `modelValue`.
  */
 export interface ValidationResult<T extends Record<string, unknown> = Record<string, unknown>> {
-  /** `true` when no field in the form has an active error. */
+  /** `true` when no field or group validator in the form has an active error. */
   isValid: boolean;
   /**
    * Typed per-field error map.
    * Keys are a subset of `keyof T` (only erroneous fields are present).
    */
   errors: Partial<Record<keyof T, FieldErrors>>;
+  /**
+   * Errors from validators attached directly to the `<lion-form>` element
+   * itself (e.g. cross-field form validators), excluding Lion's internal
+   * `FormElementsHaveNoError` meta-validator.
+   * Only present when at least one form-level validator is failing.
+   */
+  formErrors?: FieldErrors;
 }
 
 /**
@@ -321,9 +335,17 @@ export class FormController<T extends Record<string, unknown> = Record<string, u
 
     form.submitGroup();
 
-    const isValid = !form.hasFeedbackFor.includes('error');
     const errors = this.#collectErrors(form);
-    const result: ValidationResult<T> = { isValid, errors };
+    const formValidators = FormController.#ownErrorValidators(form);
+    const isValid =
+      !form.hasFeedbackFor.includes('error') &&
+      Object.keys(errors).length === 0 &&
+      formValidators.length === 0;
+    const result: ValidationResult<T> = {
+      isValid,
+      errors,
+      ...(formValidators.length > 0 ? { formErrors: { validators: formValidators } } : {}),
+    };
 
     if (!isValid) {
       this.#handleErrorNavigation(form);
@@ -354,12 +376,13 @@ export class FormController<T extends Record<string, unknown> = Record<string, u
     if (scrollToError) {
       // When both flags are on, we scroll whatever is focused (which may have
       // been set by #focusFirstError above).  When only scrollToError is on,
-      // we find the first erroneous element ourselves.
+      // we find the first erroneous element ourselves (falling back to the form
+      // itself when only a form-level validator failed).
       if (focusOnError) {
-        this.#scrollToFocused();
+        this.#scrollToFocused(form);
       } else {
-        const target = this.#findFirstErrorField(form);
-        const scrollTarget = target?._focusableNode ?? target;
+        const target = this.#findFirstErrorField(form) ?? form;
+        const scrollTarget = (target as LionFieldLike)._focusableNode ?? target;
         scrollTarget?.scrollIntoView(this.#options.scrollOptions);
       }
     }
@@ -369,32 +392,57 @@ export class FormController<T extends Record<string, unknown> = Record<string, u
    * Focuses the first field with an active `'error'` feedback type.
    *
    * Delegates to Lion's own `_setFocusOnFirstErroneousFormElement` when the
-   * form exposes it (duck-typed); falls back to a manual recursive search.
+   * form exposes it and at least one focusable descendant exists along Lion's
+   * traversal path; falls back to a safe recursive search so form/group-only
+   * failures on empty containers never throw.
    */
   #focusFirstError(form: LionFormLike): void {
-    if (typeof form._setFocusOnFirstErroneousFormElement === 'function') {
+    if (
+      typeof form._setFocusOnFirstErroneousFormElement === 'function' &&
+      this.#hasFocusableErrorTarget(form)
+    ) {
       form._setFocusOnFirstErroneousFormElement(form);
       return;
     }
 
-    const target = this.#findFirstErrorField(form);
-    if (target?._focusableNode) {
-      target._focusableNode.focus();
+    const target = this.#findFirstErrorField(form) ?? form;
+    if ((target as LionFieldLike)._focusableNode) {
+      (target as LionFieldLike)._focusableNode!.focus();
     } else {
-      target?.focus();
+      target.focus();
     }
   }
 
   /**
-   * Scrolls `document.activeElement` into view.
-   * Used when `focusOnError + scrollToError` are both active — Lion set the
-   * focus, we add the scroll on top.
+   * Checks whether Lion's `_setFocusOnFirstErroneousFormElement` traversal can
+   * reach a child with `_focusableNode` without hitting an empty `formElements`.
    */
-  #scrollToFocused(): void {
+  #hasFocusableErrorTarget(group: LionFormLike): boolean {
+    const children = FormController.#iterChildren(group.formElements);
+    const first =
+      children.find((child) => child.hasFeedbackFor?.includes('error')) ?? children[0];
+    if (!first) return false;
+    if (first._focusableNode) return true;
+    if (first.formElements) {
+      return this.#hasFocusableErrorTarget(first as unknown as LionFormLike);
+    }
+    return false;
+  }
+
+  /**
+   * Scrolls `document.activeElement` into view, falling back to the first
+   * erroneous field or form when focus could not move off `document.body`.
+   */
+  #scrollToFocused(form: LionFormLike): void {
     const focused = document.activeElement;
     if (focused && focused !== document.body) {
       focused.scrollIntoView(this.#options.scrollOptions);
+      return;
     }
+
+    const fallback = this.#findFirstErrorField(form) ?? form;
+    const scrollTarget = (fallback as LionFieldLike)._focusableNode ?? fallback;
+    scrollTarget?.scrollIntoView(this.#options.scrollOptions);
   }
 
   /**
@@ -434,7 +482,8 @@ export class FormController<T extends Record<string, unknown> = Record<string, u
    * ```
    * { Required: {}, MinLength: { requiredLength: 4, actualLength: 2 } }
    * ```
-   * We extract the validator names as `string[]` and assign them under the
+   * We extract the validator names as `string[]` (filtering out Lion's internal
+   * `FormElementsHaveNoError` meta-validator) and assign them under the
    * field's `name` key — cast to `keyof T` for type safety.
    *
    * Only fields whose `hasFeedbackFor` includes `'error'` appear in the map.
@@ -447,85 +496,81 @@ export class FormController<T extends Record<string, unknown> = Record<string, u
    * Lion's own `FormControlsCollection._keys()` method — to avoid polluting
    * `errors` with spurious numeric entries.
    *
-   * ### Fieldset recursion
+   * ### Group validators (`lion-fieldset` & `lion-checkbox-group`)
    *
-   * A `lion-fieldset` aggregates its children's errors into its own
-   * `hasFeedbackFor`, but its `validationStates.error` only contains Lion's
-   * internal `FormElementsHaveNoError` meta-validator — **not** the validators
-   * (`Required`, `MinLength`, …) defined on the child fields.
-   *
-   * When an entry carries its own `formElements` and is a true fieldset
-   * (`_isFormOrFieldset = true`), we recurse into it and collect the validators
-   * from the failing children, storing the result under the fieldset's key so callers see e.g.
-   * `errors.durationDetails = { validators: ['Required'] }`.
+   * Any `FormGroupMixin`-based element (`lion-fieldset`, `lion-checkbox-group`,
+   * `lion-radio-group`) can carry **both** its own validators (e.g. cross-field
+   * or `MinTwoSelected`) **and** child validators surfaced via
+   * `FormElementsHaveNoError`.  {@link #collectValidatorsForField} collects
+   * own validators (excluding `FormElementsHaveNoError`) and recursively
+   * gathers failing validators from `field.formElements` children.
    */
   #collectErrors(form: LionFormLike): Partial<Record<keyof T, FieldErrors>> {
     const errors: Partial<Record<keyof T, FieldErrors>> = {};
 
-    const recordError = (key: string, field: LionFieldLike): void => {
-      if (!field.hasFeedbackFor?.includes('error')) return;
-
-      // If this entry is a fieldset (has its own formElements and _isFormOrFieldset is true),
-      // recurse to extract the actual failing validators from the children, rather than
-      // reading the fieldset's own validationStates which only contains the
-      // Lion-internal FormElementsHaveNoError meta-validator.
-      if (field._isFormOrFieldset && field.formElements) {
-        const childValidators = this.#collectChildValidators(
-          field as unknown as LionFormLike,
-        );
-        errors[key as keyof T] = { validators: childValidators };
-        return;
-      }
-
-      const validators = Object.keys(field.validationStates?.['error'] ?? {});
-      errors[key as keyof T] = { validators };
-    };
-
     for (const key of FormController.#namedKeys(form.formElements)) {
       const entry = form.formElements[key];
+      const candidates = Array.isArray(entry) ? entry : [entry as LionFieldLike];
+      const failing = candidates.filter((f) => f.hasFeedbackFor?.includes('error'));
+      if (failing.length === 0) continue;
 
-      if (Array.isArray(entry)) {
-        // Checkbox-group / radio-group registered with `[]` suffix: the group
-        // element that carries the error surfaces the validators directly.
-        const groupWithError = entry.find((f) => f.hasFeedbackFor?.includes('error'));
-        if (groupWithError) recordError(key, groupWithError);
-      } else {
-        recordError(key, entry as LionFieldLike);
-      }
+      const validators = failing.flatMap((field) => this.#collectValidatorsForField(field));
+      errors[key as keyof T] = { validators };
     }
 
     return errors;
   }
 
   /**
-   * Recursively collects all failing validator names from the direct children
-   * of a fieldset-like group.
-   *
-   * Used by {@link #collectErrors} when it encounters a fieldset entry: the
-   * fieldset's own `validationStates` only contains Lion meta-validators, so
-   * we descend one level to find the real failing validators on the children
-   * (e.g. `Required` on a `lion-radio-group` nested inside a fieldset).
+   * Collects all failing validator names for a field or group element:
+   * its own `validationStates.error` keys (excluding Lion's internal
+   * `FormElementsHaveNoError` meta-validator) plus, when it has child
+   * `formElements` (e.g. `lion-fieldset`, `lion-checkbox-group`), any failing
+   * validators from those children recursively.
    */
-  #collectChildValidators(group: LionFormLike): string[] {
-    const validators: string[] = [];
+  #collectValidatorsForField(field: LionFieldLike): string[] {
+    const validators = FormController.#ownErrorValidators(field);
 
-    for (const key of FormController.#namedKeys(group.formElements)) {
-      const entry = group.formElements[key];
-      const candidates = Array.isArray(entry) ? entry : [entry as LionFieldLike];
-
-      for (const field of candidates) {
-        if (!field.hasFeedbackFor?.includes('error')) continue;
-
-        // If this child is itself a fieldset, go one level deeper.
-        if (field._isFormOrFieldset && field.formElements) {
-          validators.push(...this.#collectChildValidators(field as unknown as LionFormLike));
-        } else {
-          validators.push(...Object.keys(field.validationStates?.['error'] ?? {}));
-        }
+    if (field.formElements) {
+      for (const child of FormController.#iterChildren(field.formElements)) {
+        if (!child.hasFeedbackFor?.includes('error')) continue;
+        validators.push(...this.#collectValidatorsForField(child));
       }
     }
 
     return validators;
+  }
+
+  /**
+   * Returns failing validator names declared directly on `element`, excluding
+   * Lion's internal `FormElementsHaveNoError` aggregation meta-validator.
+   */
+  static #ownErrorValidators(element: {
+    validationStates?: Record<string, Record<string, unknown>>;
+  }): string[] {
+    return Object.keys(element.validationStates?.['error'] ?? {}).filter(
+      (name) => name !== FORM_ELEMENTS_HAVE_NO_ERROR,
+    );
+  }
+
+  /**
+   * Returns the ordered child elements of a `formElements` collection.
+   * Uses iteration for `FormControlsCollection` / arrays (avoiding duplicate
+   * visits from named-key properties) and falls back to named keys for plain
+   * object mocks.
+   */
+  static #iterChildren(
+    collection: { [key: string]: LionFieldLike | LionFieldLike[] } & Partial<
+      Iterable<LionFieldLike>
+    >,
+  ): LionFieldLike[] {
+    if (Symbol.iterator in collection && typeof collection[Symbol.iterator] === 'function') {
+      return Array.from(collection as Iterable<LionFieldLike>);
+    }
+    return FormController.#namedKeys(collection).flatMap((key) => {
+      const entry = collection[key];
+      return Array.isArray(entry) ? entry : [entry as LionFieldLike];
+    });
   }
 
   /**
